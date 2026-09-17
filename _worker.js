@@ -39,6 +39,25 @@ export default {
       return jsonResp({ ok: true, service: "FB Auto-Reply Pages Proxy" });
     }
 
+    // --- Direct synchronous test: /debug-private-reply?comment_id=XXX ---
+    if (url.pathname === "/debug-private-reply") {
+      const commentId = url.searchParams.get("comment_id");
+      if (!commentId) return jsonResp({ error: "pass ?comment_id=" }, 400);
+      const token = env.PAGE_ACCESS_TOKEN;
+      try {
+        const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Debug test", access_token: token }),
+          signal: AbortSignal.timeout(15000),
+        });
+        const data = await res.json();
+        return jsonResp({ status: res.status, ok: res.ok, data });
+      } catch (e) {
+        return jsonResp({ error: e.message, stack: e.stack }, 500);
+      }
+    }
+
     return jsonResp({ ok: true, service: "ATLAS FB Auto-Reply Proxy", version: "1.0" });
   },
 };
