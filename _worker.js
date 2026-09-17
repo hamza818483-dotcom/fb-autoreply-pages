@@ -228,6 +228,17 @@ async function reactToComment(commentId, env) {
       { method: "POST", signal: AbortSignal.timeout(15000) }
     );
     const data = await res.json();
+    if (!res.ok && env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
+      // Temporary: surface the exact Graph API error for love-react failures.
+      fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: env.DEBUG_CHAT_ID,
+          text: `Love react FAILED on ${commentId}\n${JSON.stringify(data)}`,
+        }),
+      }).catch(() => {});
+    }
     if (!res.ok) console.error("[fb-webhook] react failed:", JSON.stringify(data));
     return data;
   } catch (e) {
