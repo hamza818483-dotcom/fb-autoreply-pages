@@ -135,7 +135,8 @@ async function handleFbEvent(bodyText, env) {
           if (match) {
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
-              await replyToComment(commentId, match.reply, env);
+              const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
+              await replyToComment(commentId, replyText, env);
               await markReplied(commentId, env);
             }
             // Private reply disabled: requires Meta Business Verification
