@@ -121,14 +121,23 @@ async function handleFbEvent(bodyText, env) {
         if (value.item === "comment" && value.verb === "add") {
           const commentId = value.comment_id;
           const message = (value.message || "").toLowerCase();
+          const fromId = value.from && value.from.id;
           if (!commentId || !message) continue;
+
+          // Skip the page's own comments/replies (avoids reacting/replying to itself)
+          const pageId = env.PAGE_ID;
+          if (pageId && fromId && fromId === pageId) continue;
 
           // Auto love-react on EVERY comment, regardless of keyword match
           await reactToComment(commentId, env);
 
           const match = await matchKeyword(message, env);
           if (match) {
-            await replyToComment(commentId, match.reply, env);
+            const alreadyReplied = await hasReplied(commentId, env);
+            if (!alreadyReplied) {
+              await replyToComment(commentId, match.reply, env);
+              await markReplied(commentId, env);
+            }
             // Private reply disabled: requires Meta Business Verification
             // (no business documents available). Public reply only for now.
           }
@@ -171,6 +180,43 @@ async function matchKeyword(message, env) {
     console.error("[fb-webhook] Supabase keyword lookup failed:", e.message);
   }
   return null;
+}
+
+// Check if we've already replied to this comment (prevents duplicate replies
+// when Facebook retries/re-delivers the same webhook event).
+async function hasReplied(commentId, env) {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/replied_comments?comment_id=eq.${encodeURIComponent(commentId)}&select=comment_id`,
+      {
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    console.error("[fb-webhook] hasReplied check failed:", e.message);
+    return false; // fail open: better a rare duplicate than silently never replying
+  }
+}
+
+async function markReplied(commentId, env) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/replied_comments`, {
+      method: "POST",
+      headers: {
+        apikey: SB_KEY,
+        Authorization: `Bearer ${SB_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=ignore-duplicates",
+      },
+      body: JSON.stringify({ comment_id: commentId }),
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (e) {
+    console.error("[fb-webhook] markReplied failed:", e.message);
+  }
 }
 
 async function reactToComment(commentId, env) {
