@@ -45,6 +45,19 @@ export default {
 
 async function handleFbEvent(bodyText, env) {
   try {
+    // TEMP DEBUG: send raw payload to owner via Telegram so we can see
+    // exactly what Facebook sends, without needing CF log stream access.
+    if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
+      fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: env.DEBUG_CHAT_ID,
+          text: "FB webhook payload:\n" + bodyText.slice(0, 3500),
+        }),
+      }).catch(() => {});
+    }
+
     const body = JSON.parse(bodyText);
     if (body.object !== "page") return;
 
