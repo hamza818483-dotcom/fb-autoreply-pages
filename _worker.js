@@ -124,18 +124,6 @@ async function handleFbEvent(bodyText, env) {
           if (!commentId || !message) continue;
 
           const match = await matchKeyword(message, env);
-          if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
-            try {
-              await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: env.DEBUG_CHAT_ID,
-                  text: `Comment event\nmsg: ${message}\nmatch: ${JSON.stringify(match)}`,
-                }),
-              });
-            } catch (e) {}
-          }
           if (match) {
             await replyToComment(commentId, match.reply, env);
             // Private reply disabled: requires Meta Business Verification
