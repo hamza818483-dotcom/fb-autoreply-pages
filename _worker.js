@@ -58,14 +58,16 @@ async function handleFbEvent(bodyText, env) {
 
           const match = await matchKeyword(message, env);
           if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
-            fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chat_id: env.DEBUG_CHAT_ID,
-                text: `Comment event\nmsg: ${message}\nmatch: ${JSON.stringify(match)}`,
-              }),
-            }).catch(() => {});
+            try {
+              await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: env.DEBUG_CHAT_ID,
+                  text: `Comment event\nmsg: ${message}\nmatch: ${JSON.stringify(match)}`,
+                }),
+              });
+            } catch (e) {}
           }
           if (match) {
             await replyToComment(commentId, match.reply, env);
@@ -132,18 +134,20 @@ async function replyToComment(commentId, message, env) {
 }
 
 async function sendPrivateReply(commentId, message, env) {
-  const tgDebug = (text) => {
+  const tgDebug = async (text) => {
     if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
-      fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: env.DEBUG_CHAT_ID, text: text.slice(0, 3800) }),
-      }).catch(() => {});
+      try {
+        await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: env.DEBUG_CHAT_ID, text: text.slice(0, 3800) }),
+        });
+      } catch (e) {}
     }
   };
   try {
     const token = env.PAGE_ACCESS_TOKEN;
-    tgDebug(`Attempting private reply\ncommentId: ${commentId}\nmsg: ${message}`);
+    await tgDebug(`Attempting private reply\ncommentId: ${commentId}\nmsg: ${message}`);
     const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -153,14 +157,14 @@ async function sendPrivateReply(commentId, message, env) {
     const data = await res.json();
     if (!res.ok) {
       console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
-      tgDebug("Private reply FAILED:\n" + JSON.stringify(data));
+      await tgDebug("Private reply FAILED:\n" + JSON.stringify(data));
     } else {
-      tgDebug("Private reply SUCCESS:\n" + JSON.stringify(data));
+      await tgDebug("Private reply SUCCESS:\n" + JSON.stringify(data));
     }
     return data;
   } catch (e) {
     console.error("[fb-webhook] sendPrivateReply error:", e.message);
-    tgDebug("Private reply THREW ERROR:\n" + e.message);
+    await tgDebug("Private reply THREW ERROR:\n" + e.message);
   }
 }
 
