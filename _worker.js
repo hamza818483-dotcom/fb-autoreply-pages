@@ -39,6 +39,23 @@ export default {
       return jsonResp({ ok: true, service: "FB Auto-Reply Pages Proxy" });
     }
 
+    // --- Direct synchronous test: /debug-get-comment?comment_id=XXX ---
+    if (url.pathname === "/debug-get-comment") {
+      const commentId = url.searchParams.get("comment_id");
+      if (!commentId) return jsonResp({ error: "pass ?comment_id=" }, 400);
+      const token = env.PAGE_ACCESS_TOKEN;
+      try {
+        const res = await fetch(
+          `${GRAPH}/${commentId}?fields=id,from,message,can_reply_privately,created_time&access_token=${token}`,
+          { signal: AbortSignal.timeout(15000) }
+        );
+        const data = await res.json();
+        return jsonResp({ status: res.status, ok: res.ok, data });
+      } catch (e) {
+        return jsonResp({ error: e.message }, 500);
+      }
+    }
+
     // --- Direct synchronous test: /debug-private-reply?comment_id=XXX ---
     if (url.pathname === "/debug-private-reply") {
       const commentId = url.searchParams.get("comment_id");
