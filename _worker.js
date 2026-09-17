@@ -61,15 +61,16 @@ export default {
       const commentId = url.searchParams.get("comment_id");
       if (!commentId) return jsonResp({ error: "pass ?comment_id=" }, 400);
       const token = env.PAGE_ACCESS_TOKEN;
+      const ver = url.searchParams.get("v") || "v19.0";
       try {
-        const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
+        const res = await fetch(`https://graph.facebook.com/${ver}/${commentId}/private_replies`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: "Debug test", access_token: token }),
           signal: AbortSignal.timeout(15000),
         });
         const data = await res.json();
-        return jsonResp({ status: res.status, ok: res.ok, data });
+        return jsonResp({ status: res.status, ok: res.ok, version: ver, data });
       } catch (e) {
         return jsonResp({ error: e.message, stack: e.stack }, 500);
       }
