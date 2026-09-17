@@ -138,9 +138,8 @@ async function handleFbEvent(bodyText, env) {
           }
           if (match) {
             await replyToComment(commentId, match.reply, env);
-            if (match.private_reply) {
-              await sendPrivateReply(commentId, match.private_reply, env);
-            }
+            // Private reply disabled: requires Meta Business Verification
+            // (no business documents available). Public reply only for now.
           }
         }
       }
