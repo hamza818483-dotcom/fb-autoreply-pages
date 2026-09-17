@@ -39,6 +39,28 @@ export default {
       return jsonResp({ ok: true, service: "FB Auto-Reply Pages Proxy" });
     }
 
+    // --- Browser-testable simulated event (GET, for manual debugging) ---
+    if (request.method === "GET" && url.pathname === "/test-trigger") {
+      const testMsg = url.searchParams.get("msg") || "pdf test";
+      const fakeBody = JSON.stringify({
+        object: "page",
+        entry: [{
+          id: "112103831874652",
+          changes: [{
+            field: "feed",
+            value: {
+              item: "comment",
+              verb: "add",
+              comment_id: "test_comment_id_" + Date.now(),
+              message: testMsg,
+            },
+          }],
+        }],
+      });
+      ctx.waitUntil(handleFbEvent(fakeBody, env));
+      return jsonResp({ ok: true, triggered: true, simulated_message: testMsg });
+    }
+
     return jsonResp({ ok: true, service: "ATLAS FB Auto-Reply Proxy", version: "1.0" });
   },
 };
