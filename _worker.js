@@ -245,19 +245,7 @@ async function replyToComment(commentId, message, env) {
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
-    if (!res.ok) {
-      console.error("[fb-webhook] reply failed:", JSON.stringify(data));
-    } else if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
-      // Temporary: log the new reply comment's ID so a later disappearance can be traced.
-      fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: env.DEBUG_CHAT_ID,
-          text: `Reply posted.\nparent comment: ${commentId}\nreply id: ${data.id}\ntext: ${message.slice(0, 200)}`,
-        }),
-      }).catch(() => {});
-    }
+    if (!res.ok) console.error("[fb-webhook] reply failed:", JSON.stringify(data));
     return data;
   } catch (e) {
     console.error("[fb-webhook] replyToComment error:", e.message);
