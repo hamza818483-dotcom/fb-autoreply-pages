@@ -63,12 +63,10 @@ export default {
       const token = env.PAGE_ACCESS_TOKEN;
       const ver = url.searchParams.get("v") || "v19.0";
       try {
-        const res = await fetch(`https://graph.facebook.com/${ver}/${commentId}/private_replies`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: "Debug test", access_token: token }),
-          signal: AbortSignal.timeout(15000),
-        });
+    const res = await fetch(
+      `https://graph.facebook.com/${ver}/${commentId}/private_replies?message=${encodeURIComponent("Debug test")}&access_token=${encodeURIComponent(token)}`,
+      { method: "POST", signal: AbortSignal.timeout(15000) }
+    );
         const data = await res.json();
         return jsonResp({ status: res.status, ok: res.ok, version: ver, data });
       } catch (e) {
@@ -185,12 +183,10 @@ async function sendPrivateReply(commentId, message, env) {
   try {
     const token = env.PAGE_ACCESS_TOKEN;
     await tgDebug(`Attempting private reply\ncommentId: ${commentId}\nmsg: ${message}`);
-    const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, access_token: token }),
-      signal: AbortSignal.timeout(15000),
-    });
+    const res = await fetch(
+      `${GRAPH}/${commentId}/private_replies?message=${encodeURIComponent(message)}&access_token=${encodeURIComponent(token)}`,
+      { method: "POST", signal: AbortSignal.timeout(15000) }
+    );
     const data = await res.json();
     if (!res.ok) {
       console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
