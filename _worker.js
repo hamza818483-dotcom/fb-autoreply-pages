@@ -123,6 +123,9 @@ async function handleFbEvent(bodyText, env) {
           const message = (value.message || "").toLowerCase();
           if (!commentId || !message) continue;
 
+          // Auto love-react on EVERY comment, regardless of keyword match
+          await reactToComment(commentId, env);
+
           const match = await matchKeyword(message, env);
           if (match) {
             await replyToComment(commentId, match.reply, env);
@@ -168,6 +171,21 @@ async function matchKeyword(message, env) {
     console.error("[fb-webhook] Supabase keyword lookup failed:", e.message);
   }
   return null;
+}
+
+async function reactToComment(commentId, env) {
+  try {
+    const token = env.PAGE_ACCESS_TOKEN;
+    const res = await fetch(
+      `${GRAPH}/${commentId}/likes?type=LOVE&access_token=${encodeURIComponent(token)}`,
+      { method: "POST", signal: AbortSignal.timeout(15000) }
+    );
+    const data = await res.json();
+    if (!res.ok) console.error("[fb-webhook] react failed:", JSON.stringify(data));
+    return data;
+  } catch (e) {
+    console.error("[fb-webhook] reactToComment error:", e.message);
+  }
 }
 
 async function replyToComment(commentId, message, env) {
