@@ -223,7 +223,7 @@ async function reactToComment(commentId, env) {
   try {
     const token = env.PAGE_ACCESS_TOKEN;
     const res = await fetch(
-      `${GRAPH}/${commentId}/likes?type=LOVE&access_token=${encodeURIComponent(token)}`,
+      `${GRAPH}/${commentId}/reactions?type=LOVE&access_token=${encodeURIComponent(token)}`,
       { method: "POST", signal: AbortSignal.timeout(15000) }
     );
     const data = await res.json();
