@@ -131,7 +131,19 @@ async function sendPrivateReply(commentId, message, env) {
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
-    if (!res.ok) console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
+    if (!res.ok) {
+      console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
+      if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
+        fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: env.DEBUG_CHAT_ID,
+            text: "Private reply FAILED:\n" + JSON.stringify(data).slice(0, 3500),
+          }),
+        }).catch(() => {});
+      }
+    }
     return data;
   } catch (e) {
     console.error("[fb-webhook] sendPrivateReply error:", e.message);
