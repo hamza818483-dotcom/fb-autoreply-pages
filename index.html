@@ -139,6 +139,22 @@
       <h2>বর্তমান Keywords</h2>
       <div id="kwList"><div class="muted-block">লোড হচ্ছে...</div></div>
     </div>
+
+    <div class="card">
+      <h2>🤖 AI Reply (keyword match না হলে)</h2>
+      <div class="row" style="margin-bottom:14px">
+        <label style="margin-bottom:0;flex:1">AI reply চালু করুন</label>
+        <input type="checkbox" id="aiEnabled" style="width:auto;margin-bottom:0" />
+      </div>
+      <label>System Prompt (bot কেমন reply দেবে তা লিখুন)</label>
+      <textarea id="aiPrompt" placeholder="তুমি একটা Facebook page assistant। বাংলায় সংক্ষেপে, ভদ্রভাবে reply দেবে..." style="min-height:90px"></textarea>
+      <label>Gemini API Keys (কমা দিয়ে একাধিক)</label>
+      <input type="text" id="geminiKeys" placeholder="AIzaSy..., AIzaSy..." />
+      <label>Groq API Keys (কমা দিয়ে একাধিক)</label>
+      <input type="text" id="groqKeys" placeholder="gsk_..., gsk_..." />
+      <button id="saveAiBtn">সেভ করুন</button>
+      <div class="helper" id="aiMsg"></div>
+    </div>
   </div>
 
 </div>
@@ -224,11 +240,13 @@ async function loadPages(){
   currentPageId = currentPages[0].page_id;
   sel.value = currentPageId;
   await loadKeywords();
+  await loadAiSettings();
 }
 
 $('pageSelect').onchange = async (e) => {
   currentPageId = e.target.value;
   await loadKeywords();
+  await loadAiSettings();
 };
 
 $('addPageBtn').onclick = () => $('addPageForm').classList.toggle('hidden');
@@ -293,6 +311,33 @@ $('addKwBtn').onclick = async () => {
 };
 
 init();
+
+// ---- AI Settings ----
+async function loadAiSettings(){
+  if (!currentPageId) return;
+  const { data, error } = await sb.from('ai_settings').select('*').eq('page_id', currentPageId).maybeSingle();
+  if (error) { console.error(error); return; }
+  $('aiEnabled').checked = data ? !!data.ai_enabled : false;
+  $('aiPrompt').value = data ? (data.system_prompt || '') : '';
+  $('geminiKeys').value = data ? (data.gemini_keys || '') : '';
+  $('groqKeys').value = data ? (data.groq_keys || '') : '';
+}
+
+$('saveAiBtn').onclick = async () => {
+  if (!currentPageId) { showMsg($('aiMsg'), 'প্রথমে একটা পেজ সিলেক্ট করুন'); return; }
+  const payload = {
+    page_id: currentPageId,
+    ai_enabled: $('aiEnabled').checked,
+    system_prompt: $('aiPrompt').value.trim(),
+    gemini_keys: $('geminiKeys').value.trim(),
+    groq_keys: $('groqKeys').value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await sb.from('ai_settings').upsert(payload, { onConflict: 'page_id' });
+  if (error) { showMsg($('aiMsg'), error.message); return; }
+  showMsg($('aiMsg'), 'সেভ হয়েছে', true);
+};
+
 </script>
 </body>
 </html>
