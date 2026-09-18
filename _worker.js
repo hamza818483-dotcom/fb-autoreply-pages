@@ -73,6 +73,7 @@ async function handleFbEvent(bodyText, env) {
 
       for (const change of entry.changes || []) {
         const value = change.value || {};
+        await tgDebugGlobal(env, `[STEP-DEBUG] change.value item=${value.item} verb=${value.verb} hasMessage=${!!value.message}`);
         if (value.item === "comment" && value.verb === "add") {
           const commentId = value.comment_id;
           const message = (value.message || "").toLowerCase();
@@ -84,11 +85,13 @@ async function handleFbEvent(bodyText, env) {
 
           // Auto love-react on EVERY comment, regardless of keyword match
           const reactResult = await reactToComment(commentId, pageConfig.page_access_token, env);
+          await tgDebugGlobal(env, `[STEP-DEBUG] reactToComment result=${JSON.stringify(reactResult)}`);
           if (!reactResult || reactResult.error) {
             await tgDebugGlobal(env, `[REACT-DEBUG] love-react FAILED comment=${commentId}\n${JSON.stringify(reactResult)}`);
           }
 
           const match = await matchKeyword(message, webhookPageId, env);
+          await tgDebugGlobal(env, `[STEP-DEBUG] matchKeyword message="${message}" result=${JSON.stringify(match)}`);
           if (match) {
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
