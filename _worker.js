@@ -92,6 +92,17 @@ async function handleFbEvent(bodyText, env) {
             }
             // Private reply disabled: requires Meta Business Verification
             // (no business documents available). Public reply only for now.
+          } else {
+            // No keyword matched — try AI fallback reply if enabled for this page.
+            const alreadyReplied = await hasReplied(commentId, env);
+            if (!alreadyReplied) {
+              const aiReply = await generateAiReply(message, webhookPageId, env);
+              if (aiReply) {
+                const replyText = fromId ? `@[${fromId}] ${aiReply}` : aiReply;
+                await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
+                await markReplied(commentId, env);
+              }
+            }
           }
         }
       }
@@ -252,6 +263,105 @@ async function sendPrivateReply(commentId, message, env) {
   } catch (e) {
     console.error("[fb-webhook] sendPrivateReply error:", e.message);
     await tgDebug("Private reply THREW ERROR:\n" + e.message);
+  }
+}
+
+// ============================================================
+// AI fallback reply — used when no keyword matches a comment.
+// Tries Gemini keys first (comma-separated, tried in order),
+// then Groq keys, same pattern as QuizBot's provider fallback.
+// ============================================================
+
+async function getAiSettings(pageId, env) {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/ai_settings?page_id=eq.${encodeURIComponent(pageId)}&select=*`,
+      {
+        headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch (e) {
+    console.error("[fb-webhook] getAiSettings failed:", e.message);
+    return null;
+  }
+}
+
+async function generateAiReply(message, pageId, env) {
+  const settings = await getAiSettings(pageId, env);
+  if (!settings || !settings.ai_enabled) return null;
+
+  const systemPrompt = settings.system_prompt || "You are a helpful Facebook page assistant. Reply briefly and politely in the same language as the comment.";
+  const geminiKeys = (settings.gemini_keys || "").split(",").map(k => k.trim()).filter(Boolean);
+  const groqKeys = (settings.groq_keys || "").split(",").map(k => k.trim()).filter(Boolean);
+
+  for (const key of geminiKeys) {
+    const reply = await tryGemini(key, systemPrompt, message);
+    if (reply) return reply;
+  }
+  for (const key of groqKeys) {
+    const reply = await tryGroq(key, systemPrompt, message);
+    if (reply) return reply;
+  }
+  return null;
+}
+
+async function tryGemini(apiKey, systemPrompt, message) {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: message }] }],
+        }),
+        signal: AbortSignal.timeout(15000),
+      }
+    );
+    if (!res.ok) {
+      console.error("[fb-webhook] Gemini failed:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return text ? text.trim() : null;
+  } catch (e) {
+    console.error("[fb-webhook] tryGemini error:", e.message);
+    return null;
+  }
+}
+
+async function tryGroq(apiKey, systemPrompt, message) {
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message },
+        ],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      console.error("[fb-webhook] Groq failed:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content;
+    return text ? text.trim() : null;
+  } catch (e) {
+    console.error("[fb-webhook] tryGroq error:", e.message);
+    return null;
   }
 }
 
