@@ -37,6 +37,7 @@ export default {
     // --- Facebook comment event receiver (POST) ---
     if (request.method === "POST" && url.pathname === "/fb-webhook") {
       const bodyText = await request.text();
+      ctx.waitUntil(tgDebugGlobal(env, `[ROUTE-DEBUG] POST /fb-webhook hit, len=${bodyText.length}`));
       // Ack Meta INSTANTLY, do the matching/reply work in the background —
       // mirrors QuizBot's ctx.waitUntil pattern for Telegram webhooks.
       ctx.waitUntil(handleFbEvent(bodyText, env));
@@ -56,6 +57,7 @@ export default {
 };
 
 async function handleFbEvent(bodyText, env) {
+  await tgDebugGlobal(env, `[ENTRY-DEBUG] handleFbEvent called, bodyText len=${bodyText.length}, first200=${bodyText.slice(0,200)}`);
   try {
     const body = JSON.parse(bodyText);
     if (body.object !== "page") return;
