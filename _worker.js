@@ -353,7 +353,7 @@ async function generateAiReply(message, pageId, env) {
     if (reply) return reply;
   }
   for (const key of groqKeys) {
-    const reply = await tryGroq(key, systemPrompt, message);
+    const reply = await tryGroq(key, systemPrompt, message, env);
     if (reply) return reply;
   }
   return null;
@@ -391,7 +391,7 @@ async function tryGemini(apiKey, systemPrompt, message, env) {
   }
 }
 
-async function tryGroq(apiKey, systemPrompt, message) {
+async function tryGroq(apiKey, systemPrompt, message, env) {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -410,14 +410,18 @@ async function tryGroq(apiKey, systemPrompt, message) {
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) {
-      console.error("[fb-webhook] Groq failed:", res.status, await res.text());
+      const errText = await res.text();
+      console.error("[fb-webhook] Groq failed:", res.status, errText);
+      if (env) await tgDebugGlobal(env, `[AI-DEBUG] Groq call FAILED status=${res.status} key=...${apiKey.slice(-6)}\n${errText.slice(0,400)}`);
       return null;
     }
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content;
+    if (!text && env) await tgDebugGlobal(env, `[AI-DEBUG] Groq responded but no text found: ${JSON.stringify(data).slice(0,400)}`);
     return text ? text.trim() : null;
   } catch (e) {
     console.error("[fb-webhook] tryGroq error:", e.message);
+    if (env) await tgDebugGlobal(env, `[AI-DEBUG] Groq exception: ${e.message}`);
     return null;
   }
 }
