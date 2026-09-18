@@ -60,7 +60,8 @@ async function handleFbEvent(bodyText, env) {
   await tgDebugGlobal(env, `[ENTRY-DEBUG] handleFbEvent called, bodyText len=${bodyText.length}, first200=${bodyText.slice(0,200)}`);
   try {
     const body = JSON.parse(bodyText);
-    if (body.object !== "page") return;
+    if (body.object && body.object !== "page") return;
+    if (!body.entry) return;
 
     for (const entry of body.entry || []) {
       const webhookPageId = entry.id; // the FB Page this event belongs to
