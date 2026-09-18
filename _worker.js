@@ -369,7 +369,7 @@ async function tryGemini(apiKey, systemPrompt, message, env) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: "user", parts: [{ text: message }] }],
-          generationConfig: { maxOutputTokens: 300 },
+          generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
         }),
         signal: AbortSignal.timeout(25000),
       }
