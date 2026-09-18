@@ -114,6 +114,8 @@ async function handleFbEvent(bodyText, env) {
                 const replyText = fromId ? `@[${fromId}] ${aiReply}` : aiReply;
                 await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
                 await markReplied(commentId, env);
+              } else {
+                await tgDebugGlobal(env, `[AI-DEBUG] generateAiReply returned null for message="${message}" page=${webhookPageId}`);
               }
             }
           }
@@ -318,8 +320,13 @@ async function getAiSettings(pageId, env) {
       }
     );
     const rows = await r.json();
+    if (!r.ok) {
+      await tgDebugGlobal(env, `[AI-DEBUG] getAiSettings query failed status=${r.status} ${JSON.stringify(rows).slice(0,300)}`);
+      return null;
+    }
     return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   } catch (e) {
+    await tgDebugGlobal(env, `[AI-DEBUG] getAiSettings exception: ${e.message}`);
     console.error("[fb-webhook] getAiSettings failed:", e.message);
     return null;
   }
@@ -327,14 +334,22 @@ async function getAiSettings(pageId, env) {
 
 async function generateAiReply(message, pageId, env) {
   const settings = await getAiSettings(pageId, env);
-  if (!settings || !settings.ai_enabled) return null;
+  if (!settings) {
+    await tgDebugGlobal(env, `[AI-DEBUG] no ai_settings row for page=${pageId} — AI reply not configured`);
+    return null;
+  }
+  if (!settings.ai_enabled) {
+    await tgDebugGlobal(env, `[AI-DEBUG] ai_settings found for page=${pageId} but ai_enabled=false`);
+    return null;
+  }
 
   const systemPrompt = settings.system_prompt || "You are a helpful Facebook page assistant. Reply briefly and politely in the same language as the comment.";
   const geminiKeys = (settings.gemini_keys || "").split(",").map(k => k.trim()).filter(Boolean);
   const groqKeys = (settings.groq_keys || "").split(",").map(k => k.trim()).filter(Boolean);
+  await tgDebugGlobal(env, `[AI-DEBUG] ai_enabled=true geminiKeys=${geminiKeys.length} groqKeys=${groqKeys.length}`);
 
   for (const key of geminiKeys) {
-    const reply = await tryGemini(key, systemPrompt, message);
+    const reply = await tryGemini(key, systemPrompt, message, env);
     if (reply) return reply;
   }
   for (const key of groqKeys) {
@@ -344,7 +359,7 @@ async function generateAiReply(message, pageId, env) {
   return null;
 }
 
-async function tryGemini(apiKey, systemPrompt, message) {
+async function tryGemini(apiKey, systemPrompt, message, env) {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
@@ -359,14 +374,18 @@ async function tryGemini(apiKey, systemPrompt, message) {
       }
     );
     if (!res.ok) {
-      console.error("[fb-webhook] Gemini failed:", res.status, await res.text());
+      const errText = await res.text();
+      console.error("[fb-webhook] Gemini failed:", res.status, errText);
+      if (env) await tgDebugGlobal(env, `[AI-DEBUG] Gemini call FAILED status=${res.status}\n${errText.slice(0,400)}`);
       return null;
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text && env) await tgDebugGlobal(env, `[AI-DEBUG] Gemini responded but no text found: ${JSON.stringify(data).slice(0,400)}`);
     return text ? text.trim() : null;
   } catch (e) {
     console.error("[fb-webhook] tryGemini error:", e.message);
+    if (env) await tgDebugGlobal(env, `[AI-DEBUG] Gemini exception: ${e.message}`);
     return null;
   }
 }
