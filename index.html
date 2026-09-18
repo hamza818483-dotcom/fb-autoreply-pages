@@ -1,1 +1,272 @@
-FB Auto-Reply Proxy — see functions/_worker.js
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FB Auto-Reply Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222b; --border:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa1ac; --accent:#4f8cff; --accent-2:#3a6fd6;
+    --danger:#e5484d; --ok:#2fb872; --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh}
+  .wrap{max-width:880px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 28px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:18px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input,textarea,select{
+    width:100%;padding:10px 12px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:8px;color:var(--text);font-size:14px;margin-bottom:14px;font-family:inherit
+  }
+  textarea{resize:vertical;min-height:70px}
+  button{
+    background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 18px;
+    font-size:14px;cursor:pointer;font-weight:600
+  }
+  button:hover{background:var(--accent-2)}
+  button.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
+  button.secondary:hover{background:var(--panel-2)}
+  button.danger{background:transparent;border:1px solid var(--danger);color:var(--danger)}
+  button.danger:hover{background:rgba(229,72,77,.1)}
+  .row{display:flex;gap:10px;align-items:center}
+  .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+  .kw-item{border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;background:var(--panel-2)}
+  .kw-item .kw{font-weight:600;color:var(--accent);font-size:13px;margin-bottom:6px}
+  .kw-item .reply{font-size:14px;color:var(--text);white-space:pre-wrap;margin-bottom:10px}
+  .msg{font-size:13px;padding:10px 12px;border-radius:8px;margin-bottom:14px}
+  .msg.err{background:rgba(229,72,77,.12);color:#ff8a8d;border:1px solid rgba(229,72,77,.3)}
+  .msg.ok{background:rgba(47,184,114,.12);color:#6adf9e;border:1px solid rgba(47,184,114,.3)}
+  .hidden{display:none}
+  .muted-block{color:var(--muted);font-size:13px;padding:20px;text-align:center}
+  select#pageSelect{margin-bottom:0}
+  .page-header{display:flex;gap:10px;align-items:center;margin-bottom:18px}
+  .page-header select{margin-bottom:0;flex:1}
+  h2{font-size:15px;margin:0 0 16px;color:var(--text)}
+  .helper{font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- LOGIN VIEW -->
+  <div id="loginView" class="hidden">
+    <h1>FB Auto-Reply Dashboard</h1>
+    <p class="sub">Comment keyword ও reply নিয়ন্ত্রণ করুন এখান থেকে</p>
+    <div class="card" style="max-width:380px">
+      <div id="loginMsg"></div>
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com" />
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" />
+      <div class="row">
+        <button id="loginBtn">লগইন</button>
+        <button class="secondary" id="signupBtn">অ্যাকাউন্ট খুলুন</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="dashView" class="hidden">
+    <div class="top">
+      <div>
+        <h1>FB Auto-Reply Dashboard</h1>
+        <p class="sub" id="whoami"></p>
+      </div>
+      <button class="secondary" id="logoutBtn">লগআউট</button>
+    </div>
+
+    <div class="card">
+      <h2>Facebook Page</h2>
+      <div class="page-header">
+        <select id="pageSelect"></select>
+        <button class="secondary" id="addPageBtn">+ নতুন পেজ যোগ করুন</button>
+      </div>
+      <div id="addPageForm" class="hidden">
+        <label>Page নাম (identification-এর জন্য)</label>
+        <input type="text" id="newPageName" placeholder="যেমনঃ ATLAS Quiz Page" />
+        <label>Page ID</label>
+        <input type="text" id="newPageId" placeholder="1025072427250422" />
+        <label>Page Access Token</label>
+        <textarea id="newPageToken" placeholder="EAAG..."></textarea>
+        <div class="row">
+          <button id="savePageBtn">সেভ করুন</button>
+          <button class="secondary" id="cancelPageBtn">বাতিল</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="keywordsCard">
+      <h2>Keyword → Reply যোগ করুন</h2>
+      <label>Keyword (কমা দিয়ে একাধিক লিখুন)</label>
+      <input type="text" id="kwInput" placeholder="exam, পরীক্ষা, suggestion" />
+      <label>Reply মেসেজ</label>
+      <textarea id="replyInput" placeholder="এই কমেন্টে যা রিপ্লাই যাবে..."></textarea>
+      <button id="addKwBtn">যোগ করুন</button>
+      <div class="helper" id="kwMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>বর্তমান Keywords</h2>
+      <div id="kwList"><div class="muted-block">লোড হচ্ছে...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = "https://wbdyjpjbczfunyhhmtry.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndiZHlqcGpiY3pmdW55aGhtdHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTI5ODAsImV4cCI6MjA5NjI2ODk4MH0.0WR1sgVsl_1XWZfSd0Pwoe6Uxp-2GMTksfseMn5aWjg";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentPages = [];
+let currentPageId = null;
+
+const $ = (id) => document.getElementById(id);
+
+function showMsg(el, text, ok=false){
+  el.innerHTML = `<div class="msg ${ok?'ok':'err'}">${text}</div>`;
+}
+
+async function init(){
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    showDashboard(session);
+  } else {
+    $('loginView').classList.remove('hidden');
+    $('dashView').classList.add('hidden');
+  }
+}
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (session) showDashboard(session);
+  else {
+    $('loginView').classList.remove('hidden');
+    $('dashView').classList.add('hidden');
+  }
+});
+
+async function showDashboard(session){
+  $('loginView').classList.add('hidden');
+  $('dashView').classList.remove('hidden');
+  $('whoami').textContent = session.user.email;
+  await loadPages();
+}
+
+$('loginBtn').onclick = async () => {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) showMsg($('loginMsg'), error.message);
+};
+
+$('signupBtn').onclick = async () => {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  if (!email || !password) { showMsg($('loginMsg'), 'ইমেইল ও পাসওয়ার্ড দিন'); return; }
+  const { error } = await sb.auth.signUp({ email, password });
+  if (error) showMsg($('loginMsg'), error.message);
+  else showMsg($('loginMsg'), 'অ্যাকাউন্ট তৈরি হয়েছে — এখন লগইন করুন', true);
+};
+
+$('logoutBtn').onclick = async () => {
+  await sb.auth.signOut();
+};
+
+// ---- Pages ----
+async function loadPages(){
+  const { data, error } = await sb.from('fb_pages').select('*').order('created_at');
+  if (error) { console.error(error); return; }
+  currentPages = data || [];
+  const sel = $('pageSelect');
+  sel.innerHTML = '';
+  if (currentPages.length === 0) {
+    sel.innerHTML = '<option value="">কোনো পেজ যোগ করা নেই</option>';
+    currentPageId = null;
+    $('kwList').innerHTML = '<div class="muted-block">প্রথমে একটা Facebook Page যোগ করুন</div>';
+    return;
+  }
+  currentPages.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.page_id;
+    opt.textContent = p.page_name || p.page_id;
+    sel.appendChild(opt);
+  });
+  currentPageId = currentPages[0].page_id;
+  sel.value = currentPageId;
+  await loadKeywords();
+}
+
+$('pageSelect').onchange = async (e) => {
+  currentPageId = e.target.value;
+  await loadKeywords();
+};
+
+$('addPageBtn').onclick = () => $('addPageForm').classList.toggle('hidden');
+$('cancelPageBtn').onclick = () => $('addPageForm').classList.add('hidden');
+
+$('savePageBtn').onclick = async () => {
+  const { data: { user } } = await sb.auth.getUser();
+  const page_name = $('newPageName').value.trim();
+  const page_id = $('newPageId').value.trim();
+  const page_access_token = $('newPageToken').value.trim();
+  if (!page_id || !page_access_token) { alert('Page ID ও Access Token দিন'); return; }
+  const { error } = await sb.from('fb_pages').insert({
+    owner_id: user.id, page_id, page_name, page_access_token
+  });
+  if (error) { alert(error.message); return; }
+  $('newPageName').value = ''; $('newPageId').value = ''; $('newPageToken').value = '';
+  $('addPageForm').classList.add('hidden');
+  await loadPages();
+};
+
+// ---- Keywords ----
+async function loadKeywords(){
+  if (!currentPageId) return;
+  $('kwList').innerHTML = '<div class="muted-block">লোড হচ্ছে...</div>';
+  const { data, error } = await sb.from('keyword_replies')
+    .select('*').eq('page_id', currentPageId).order('created_at', { ascending: false });
+  if (error) { $('kwList').innerHTML = `<div class="muted-block">${error.message}</div>`; return; }
+  if (!data || data.length === 0) {
+    $('kwList').innerHTML = '<div class="muted-block">এখনো কোনো keyword যোগ করা হয়নি</div>';
+    return;
+  }
+  $('kwList').innerHTML = '';
+  data.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'kw-item';
+    div.innerHTML = `
+      <div class="kw">${row.keyword}</div>
+      <div class="reply">${row.reply}</div>
+      <button class="danger" data-id="${row.id}">ডিলিট করুন</button>
+    `;
+    div.querySelector('button').onclick = async () => {
+      if (!confirm('এই keyword ডিলিট করবেন?')) return;
+      await sb.from('keyword_replies').delete().eq('id', row.id);
+      await loadKeywords();
+    };
+    $('kwList').appendChild(div);
+  });
+}
+
+$('addKwBtn').onclick = async () => {
+  if (!currentPageId) { showMsg($('kwMsg'), 'প্রথমে একটা পেজ যোগ/সিলেক্ট করুন'); return; }
+  const keyword = $('kwInput').value.trim();
+  const reply = $('replyInput').value.trim();
+  if (!keyword || !reply) { showMsg($('kwMsg'), 'Keyword ও Reply দুটোই দিন'); return; }
+  const { error } = await sb.from('keyword_replies').insert({
+    keyword, reply, page_id: currentPageId
+  });
+  if (error) { showMsg($('kwMsg'), error.message); return; }
+  $('kwInput').value = ''; $('replyInput').value = '';
+  $('kwMsg').innerHTML = '';
+  await loadKeywords();
+};
+
+init();
+</script>
+</body>
+</html>

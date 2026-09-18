@@ -106,6 +106,10 @@ export default {
       }
     }
 
+    // Everything else: serve the static dashboard (index.html, etc.)
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
     return jsonResp({ ok: true, service: "ATLAS FB Auto-Reply Proxy", version: "1.0" });
   },
 };
@@ -116,6 +120,13 @@ async function handleFbEvent(bodyText, env) {
     if (body.object !== "page") return;
 
     for (const entry of body.entry || []) {
+      const webhookPageId = entry.id; // the FB Page this event belongs to
+      const pageConfig = await getPageConfig(webhookPageId, env);
+      if (!pageConfig) {
+        console.error("[fb-webhook] no fb_pages row for page_id:", webhookPageId);
+        continue;
+      }
+
       for (const change of entry.changes || []) {
         const value = change.value || {};
         if (value.item === "comment" && value.verb === "add") {
@@ -125,18 +136,17 @@ async function handleFbEvent(bodyText, env) {
           if (!commentId || !message) continue;
 
           // Skip the page's own comments/replies (avoids reacting/replying to itself)
-          const pageId = env.PAGE_ID;
-          if (pageId && fromId && fromId === pageId) continue;
+          if (fromId && fromId === webhookPageId) continue;
 
           // Auto love-react on EVERY comment, regardless of keyword match
-          await reactToComment(commentId, env);
+          await reactToComment(commentId, pageConfig.page_access_token, env);
 
-          const match = await matchKeyword(message, env);
+          const match = await matchKeyword(message, webhookPageId, env);
           if (match) {
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
               const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
-              await replyToComment(commentId, replyText, env);
+              await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
               await markReplied(commentId, env);
             }
             // Private reply disabled: requires Meta Business Verification
@@ -150,12 +160,31 @@ async function handleFbEvent(bodyText, env) {
   }
 }
 
-// Query Supabase keyword_replies table directly (REST API — no DB driver,
-// no Postgres TCP connection needed, works reliably from CF).
-async function matchKeyword(message, env) {
+// Look up a connected page's config (access token etc) by its Facebook page_id.
+async function getPageConfig(pageId, env) {
+  if (!pageId) return null;
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/keyword_replies?select=keyword,reply,private_reply`,
+      `${SB_URL}/rest/v1/fb_pages?page_id=eq.${encodeURIComponent(pageId)}&select=page_id,page_access_token`,
+      {
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch (e) {
+    console.error("[fb-webhook] getPageConfig failed:", e.message);
+    return null;
+  }
+}
+
+// Query Supabase keyword_replies table directly (REST API — no DB driver,
+// no Postgres TCP connection needed, works reliably from CF).
+async function matchKeyword(message, pageId, env) {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`,
       {
         headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
         signal: AbortSignal.timeout(10000),
@@ -220,9 +249,9 @@ async function markReplied(commentId, env) {
   }
 }
 
-async function reactToComment(commentId, env) {
+async function reactToComment(commentId, pageAccessToken, env) {
   try {
-    const token = env.PAGE_ACCESS_TOKEN;
+    const token = pageAccessToken || env.PAGE_ACCESS_TOKEN;
     const res = await fetch(
       `${GRAPH}/${commentId}/likes?access_token=${encodeURIComponent(token)}`,
       { method: "POST", signal: AbortSignal.timeout(15000) }
@@ -235,9 +264,9 @@ async function reactToComment(commentId, env) {
   }
 }
 
-async function replyToComment(commentId, message, env) {
+async function replyToComment(commentId, message, pageAccessToken, env) {
   try {
-    const token = env.PAGE_ACCESS_TOKEN;
+    const token = pageAccessToken || env.PAGE_ACCESS_TOKEN;
     const res = await fetch(`${GRAPH}/${commentId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
