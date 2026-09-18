@@ -405,6 +405,7 @@ async function tryGroq(apiKey, systemPrompt, message) {
           { role: "system", content: systemPrompt },
           { role: "user", content: message },
         ],
+        max_tokens: 400,
       }),
       signal: AbortSignal.timeout(15000),
     });
