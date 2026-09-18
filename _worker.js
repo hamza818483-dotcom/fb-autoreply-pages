@@ -369,8 +369,9 @@ async function tryGemini(apiKey, systemPrompt, message, env) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: "user", parts: [{ text: message }] }],
+          generationConfig: { maxOutputTokens: 300 },
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(25000),
       }
     );
     if (!res.ok) {
