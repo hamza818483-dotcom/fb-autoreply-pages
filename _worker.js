@@ -37,7 +37,6 @@ export default {
     // --- Facebook comment event receiver (POST) ---
     if (request.method === "POST" && url.pathname === "/fb-webhook") {
       const bodyText = await request.text();
-      ctx.waitUntil(tgDebugGlobal(env, `[ROUTE-DEBUG] POST /fb-webhook hit, len=${bodyText.length}`));
       // Ack Meta INSTANTLY, do the matching/reply work in the background —
       // mirrors QuizBot's ctx.waitUntil pattern for Telegram webhooks.
       ctx.waitUntil(handleFbEvent(bodyText, env));
@@ -57,24 +56,27 @@ export default {
 };
 
 async function handleFbEvent(bodyText, env) {
-  await tgDebugGlobal(env, `[ENTRY-DEBUG] full payload: ${bodyText.slice(0,3500)}`);
   try {
     const body = JSON.parse(bodyText);
+    // Meta's payload doesn't always include a top-level "object" field —
+    // only reject if it's explicitly present and wrong. Presence of "entry"
+    // is what actually matters.
     if (body.object && body.object !== "page") return;
     if (!body.entry) return;
 
     for (const entry of body.entry || []) {
       const webhookPageId = entry.id; // the FB Page this event belongs to
       const pageConfig = await getPageConfig(webhookPageId, env);
-      await tgDebugGlobal(env, `[STEP-DEBUG] getPageConfig(${webhookPageId}) -> ${pageConfig ? 'FOUND token_len='+ (pageConfig.page_access_token||'').length : 'NULL'}, changes_count=${(entry.changes||[]).length}`);
       if (!pageConfig) {
+        // Permanent (lightweight) alert: this is a real operational failure —
+        // either the page isn't configured or SUPABASE_SERVICE_ROLE_KEY is bad.
+        await tgDebugGlobal(env, `[ALERT] no pageConfig for page_id=${webhookPageId} — check fb_pages row and SUPABASE_SERVICE_ROLE_KEY env var`);
         console.error("[fb-webhook] no fb_pages row for page_id:", webhookPageId);
         continue;
       }
 
       for (const change of entry.changes || []) {
         const value = change.value || {};
-        await tgDebugGlobal(env, `[STEP-DEBUG] change.value item=${value.item} verb=${value.verb} hasMessage=${!!value.message}`);
         if (value.item === "comment" && value.verb === "add") {
           const commentId = value.comment_id;
           const message = (value.message || "").toLowerCase();
@@ -86,13 +88,11 @@ async function handleFbEvent(bodyText, env) {
 
           // Auto love-react on EVERY comment, regardless of keyword match
           const reactResult = await reactToComment(commentId, pageConfig.page_access_token, env);
-          await tgDebugGlobal(env, `[STEP-DEBUG] reactToComment result=${JSON.stringify(reactResult)}`);
           if (!reactResult || reactResult.error) {
             await tgDebugGlobal(env, `[REACT-DEBUG] love-react FAILED comment=${commentId}\n${JSON.stringify(reactResult)}`);
           }
 
           const match = await matchKeyword(message, webhookPageId, env);
-          await tgDebugGlobal(env, `[STEP-DEBUG] matchKeyword message="${message}" result=${JSON.stringify(match)}`);
           if (match) {
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
@@ -137,10 +137,16 @@ async function getPageConfig(pageId, env) {
       }
     );
     const rows = await r.json();
-    await tgDebugGlobal(env, `[PAGECFG-DEBUG] status=${r.status} keyUsed=${dbKey(env) === SB_KEY ? 'ANON-fallback' : 'SERVICE_ROLE'} rows=${JSON.stringify(rows).slice(0,500)}`);
+    if (!r.ok) {
+      // Permanent safeguard: Supabase auth/key failures fail silently otherwise
+      // (this exact bug cost hours of debugging once — SUPABASE_SERVICE_ROLE_KEY
+      // was invalid and getPageConfig just returned null with no visible reason).
+      await tgDebugGlobal(env, `[ALERT] Supabase fb_pages query failed status=${r.status} — likely bad SUPABASE_SERVICE_ROLE_KEY. ${JSON.stringify(rows).slice(0,300)}`);
+      return null;
+    }
     return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   } catch (e) {
-    await tgDebugGlobal(env, `[PAGECFG-DEBUG] EXCEPTION: ${e.message}`);
+    await tgDebugGlobal(env, `[ALERT] getPageConfig exception: ${e.message}`);
     console.error("[fb-webhook] getPageConfig failed:", e.message);
     return null;
   }
@@ -168,10 +174,10 @@ async function matchKeyword(message, pageId, env) {
       signal: AbortSignal.timeout(10000),
     });
     const rows = await r.json();
-    await tgDebugGlobal(env,
-      `[KW-DEBUG] pageId=${pageId}\nmessage="${message}"\nhttp=${r.status}\nrows=${Array.isArray(rows) ? rows.length : "NOT_ARRAY: " + JSON.stringify(rows).slice(0,300)}`
-    );
-    if (!Array.isArray(rows)) return null;
+    if (!r.ok || !Array.isArray(rows)) {
+      await tgDebugGlobal(env, `[ALERT] Supabase keyword_replies query failed status=${r.status} — ${JSON.stringify(rows).slice(0,300)}`);
+      return null;
+    }
 
     for (const row of rows) {
       const keywordsRaw = row.keyword || "";
@@ -180,7 +186,6 @@ async function matchKeyword(message, pageId, env) {
         .map((k) => k.trim().toLowerCase())
         .filter(Boolean);
       const hit = keywords.some((kw) => kw && message.includes(kw));
-      await tgDebugGlobal(env, `[KW-DEBUG] row.keyword="${keywordsRaw}" parsed=${JSON.stringify(keywords)} hit=${hit}`);
       if (hit) {
         return {
           reply: row.reply || "",
@@ -189,7 +194,7 @@ async function matchKeyword(message, pageId, env) {
       }
     }
   } catch (e) {
-    await tgDebugGlobal(env, `[KW-DEBUG] EXCEPTION: ${e.message}`);
+    await tgDebugGlobal(env, `[ALERT] matchKeyword exception: ${e.message}`);
     console.error("[fb-webhook] Supabase keyword lookup failed:", e.message);
   }
   return null;
