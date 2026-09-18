@@ -137,8 +137,10 @@ async function getPageConfig(pageId, env) {
       }
     );
     const rows = await r.json();
+    await tgDebugGlobal(env, `[PAGECFG-DEBUG] status=${r.status} keyUsed=${dbKey(env) === SB_KEY ? 'ANON-fallback' : 'SERVICE_ROLE'} rows=${JSON.stringify(rows).slice(0,500)}`);
     return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   } catch (e) {
+    await tgDebugGlobal(env, `[PAGECFG-DEBUG] EXCEPTION: ${e.message}`);
     console.error("[fb-webhook] getPageConfig failed:", e.message);
     return null;
   }
