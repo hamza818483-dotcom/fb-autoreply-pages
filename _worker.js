@@ -344,9 +344,9 @@ async function generateAiReply(message, pageId, env) {
   }
 
   const systemPrompt = settings.system_prompt || "You are a helpful Facebook page assistant. Reply briefly and politely in the same language as the comment.";
-  const geminiKeys = (settings.gemini_keys || "").split(",").map(k => k.trim()).filter(Boolean);
-  const groqKeys = (settings.groq_keys || "").split(",").map(k => k.trim()).filter(Boolean);
-  await tgDebugGlobal(env, `[AI-DEBUG] ai_enabled=true geminiKeys=${geminiKeys.length} groqKeys=${groqKeys.length}`);
+  const geminiKeys = settings.gemini_enabled !== false ? (settings.gemini_keys || "").split(",").map(k => k.trim()).filter(Boolean) : [];
+  const groqKeys = settings.groq_enabled !== false ? (settings.groq_keys || "").split(",").map(k => k.trim()).filter(Boolean) : [];
+  await tgDebugGlobal(env, `[AI-DEBUG] ai_enabled=true geminiKeys=${geminiKeys.length}(enabled=${settings.gemini_enabled !== false}) groqKeys=${groqKeys.length}(enabled=${settings.groq_enabled !== false})`);
 
   for (const key of geminiKeys) {
     const reply = await tryGemini(key, systemPrompt, message, env);

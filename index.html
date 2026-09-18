@@ -198,10 +198,23 @@
           </div>
           <label>System Prompt (bot কেমন reply দেবে তা লিখুন)</label>
           <textarea id="aiPrompt" placeholder="তুমি একটা Facebook page assistant। বাংলায় সংক্ষেপে, ভদ্রভাবে reply দেবে..." style="min-height:90px"></textarea>
-          <label>Gemini API Keys (কমা দিয়ে একাধিক)</label>
+
+          <div class="row" style="margin-bottom:7px">
+            <label style="margin-bottom:0;flex:1">Gemini API Keys (কমা দিয়ে একাধিক)</label>
+            <label style="margin-bottom:0;display:flex;align-items:center;gap:6px;width:auto">
+              <input type="checkbox" id="geminiEnabled" style="width:auto;margin-bottom:0" /> সক্রিয়
+            </label>
+          </div>
           <input type="text" id="geminiKeys" placeholder="AIzaSy..., AIzaSy..." />
-          <label>Groq API Keys (কমা দিয়ে একাধিক)</label>
+
+          <div class="row" style="margin-bottom:7px">
+            <label style="margin-bottom:0;flex:1">Groq API Keys (কমা দিয়ে একাধিক)</label>
+            <label style="margin-bottom:0;display:flex;align-items:center;gap:6px;width:auto">
+              <input type="checkbox" id="groqEnabled" style="width:auto;margin-bottom:0" /> সক্রিয়
+            </label>
+          </div>
           <input type="text" id="groqKeys" placeholder="gsk_..., gsk_..." />
+
           <button id="saveAiBtn">সেভ করুন</button>
           <div class="helper" id="aiMsg"></div>
         </div>
@@ -482,6 +495,8 @@ async function loadAiSettings(){
   $('aiPrompt').value = data ? (data.system_prompt || '') : '';
   $('geminiKeys').value = data ? (data.gemini_keys || '') : '';
   $('groqKeys').value = data ? (data.groq_keys || '') : '';
+  $('geminiEnabled').checked = data ? data.gemini_enabled !== false : true;
+  $('groqEnabled').checked = data ? data.groq_enabled !== false : true;
 }
 
 $('saveAiBtn').onclick = async () => {
@@ -492,6 +507,8 @@ $('saveAiBtn').onclick = async () => {
     system_prompt: $('aiPrompt').value.trim(),
     gemini_keys: $('geminiKeys').value.trim(),
     groq_keys: $('groqKeys').value.trim(),
+    gemini_enabled: $('geminiEnabled').checked,
+    groq_enabled: $('groqEnabled').checked,
     updated_at: new Date().toISOString(),
   };
   const { error } = await sb.from('ai_settings').upsert(payload, { onConflict: 'page_id' });
