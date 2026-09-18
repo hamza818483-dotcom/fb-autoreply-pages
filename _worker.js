@@ -10,6 +10,14 @@ const GRAPH = "https://graph.facebook.com/v19.0";
 const SB_URL = "https://wbdyjpjbczfunyhhmtry.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndiZHlqcGpiY3pmdW55aGhtdHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTI5ODAsImV4cCI6MjA5NjI2ODk4MH0.0WR1sgVsl_1XWZfSd0Pwoe6Uxp-2GMTksfseMn5aWjg";
 
+// The webhook has no user session, so RLS-protected tables (fb_pages,
+// keyword_replies) require the service_role key to bypass RLS. Falls back
+// to the anon key (which RLS will reject) until SUPABASE_SERVICE_ROLE_KEY
+// is configured in Cloudflare Pages env vars.
+function dbKey(env) {
+  return env.SUPABASE_SERVICE_ROLE_KEY || SB_KEY;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -167,7 +175,7 @@ async function getPageConfig(pageId, env) {
     const r = await fetch(
       `${SB_URL}/rest/v1/fb_pages?page_id=eq.${encodeURIComponent(pageId)}&select=page_id,page_access_token`,
       {
-        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+        headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
         signal: AbortSignal.timeout(10000),
       }
     );
@@ -186,7 +194,7 @@ async function matchKeyword(message, pageId, env) {
     const r = await fetch(
       `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`,
       {
-        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+        headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
         signal: AbortSignal.timeout(10000),
       }
     );
@@ -219,7 +227,7 @@ async function hasReplied(commentId, env) {
     const r = await fetch(
       `${SB_URL}/rest/v1/replied_comments?comment_id=eq.${encodeURIComponent(commentId)}&select=comment_id`,
       {
-        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+        headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
         signal: AbortSignal.timeout(10000),
       }
     );
@@ -236,8 +244,8 @@ async function markReplied(commentId, env) {
     await fetch(`${SB_URL}/rest/v1/replied_comments`, {
       method: "POST",
       headers: {
-        apikey: SB_KEY,
-        Authorization: `Bearer ${SB_KEY}`,
+        apikey: dbKey(env),
+        Authorization: `Bearer ${dbKey(env)}`,
         "Content-Type": "application/json",
         Prefer: "resolution=ignore-duplicates",
       },
