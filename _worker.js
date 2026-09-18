@@ -80,14 +80,20 @@ async function handleFbEvent(bodyText, env) {
           if (fromId && fromId === webhookPageId) continue;
 
           // Auto love-react on EVERY comment, regardless of keyword match
-          await reactToComment(commentId, pageConfig.page_access_token, env);
+          const reactResult = await reactToComment(commentId, pageConfig.page_access_token, env);
+          if (!reactResult || reactResult.error) {
+            await tgDebugGlobal(env, `[REACT-DEBUG] love-react FAILED comment=${commentId}\n${JSON.stringify(reactResult)}`);
+          }
 
           const match = await matchKeyword(message, webhookPageId, env);
           if (match) {
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
               const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
-              await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
+              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
+              if (!replyResult || replyResult.error) {
+                await tgDebugGlobal(env, `[REPLY-DEBUG] keyword-reply FAILED comment=${commentId}\n${JSON.stringify(replyResult)}`);
+              }
               await markReplied(commentId, env);
             }
             // Private reply disabled: requires Meta Business Verification
