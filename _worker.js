@@ -131,18 +131,31 @@ async function getPageConfig(pageId, env) {
   }
 }
 
+async function tgDebugGlobal(env, text) {
+  if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
+    try {
+      await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: env.DEBUG_CHAT_ID, text: text.slice(0, 3800) }),
+      });
+    } catch (e) {}
+  }
+}
+
 // Query Supabase keyword_replies table directly (REST API — no DB driver,
 // no Postgres TCP connection needed, works reliably from CF).
 async function matchKeyword(message, pageId, env) {
   try {
-    const r = await fetch(
-      `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`,
-      {
-        headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
-        signal: AbortSignal.timeout(10000),
-      }
-    );
+    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`;
+    const r = await fetch(url, {
+      headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
+      signal: AbortSignal.timeout(10000),
+    });
     const rows = await r.json();
+    await tgDebugGlobal(env,
+      `[KW-DEBUG] pageId=${pageId}\nmessage="${message}"\nhttp=${r.status}\nrows=${Array.isArray(rows) ? rows.length : "NOT_ARRAY: " + JSON.stringify(rows).slice(0,300)}`
+    );
     if (!Array.isArray(rows)) return null;
 
     for (const row of rows) {
@@ -151,7 +164,9 @@ async function matchKeyword(message, pageId, env) {
         .split(",")
         .map((k) => k.trim().toLowerCase())
         .filter(Boolean);
-      if (keywords.some((kw) => kw && message.includes(kw))) {
+      const hit = keywords.some((kw) => kw && message.includes(kw));
+      await tgDebugGlobal(env, `[KW-DEBUG] row.keyword="${keywordsRaw}" parsed=${JSON.stringify(keywords)} hit=${hit}`);
+      if (hit) {
         return {
           reply: row.reply || "",
           private_reply: row.private_reply || row.reply || "",
@@ -159,6 +174,7 @@ async function matchKeyword(message, pageId, env) {
       }
     }
   } catch (e) {
+    await tgDebugGlobal(env, `[KW-DEBUG] EXCEPTION: ${e.message}`);
     console.error("[fb-webhook] Supabase keyword lookup failed:", e.message);
   }
   return null;
