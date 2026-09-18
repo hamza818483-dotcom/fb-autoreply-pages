@@ -57,7 +57,7 @@ export default {
 };
 
 async function handleFbEvent(bodyText, env) {
-  await tgDebugGlobal(env, `[ENTRY-DEBUG] handleFbEvent called, bodyText len=${bodyText.length}, first200=${bodyText.slice(0,200)}`);
+  await tgDebugGlobal(env, `[ENTRY-DEBUG] full payload: ${bodyText.slice(0,3500)}`);
   try {
     const body = JSON.parse(bodyText);
     if (body.object && body.object !== "page") return;
@@ -66,6 +66,7 @@ async function handleFbEvent(bodyText, env) {
     for (const entry of body.entry || []) {
       const webhookPageId = entry.id; // the FB Page this event belongs to
       const pageConfig = await getPageConfig(webhookPageId, env);
+      await tgDebugGlobal(env, `[STEP-DEBUG] getPageConfig(${webhookPageId}) -> ${pageConfig ? 'FOUND token_len='+ (pageConfig.page_access_token||'').length : 'NULL'}, changes_count=${(entry.changes||[]).length}`);
       if (!pageConfig) {
         console.error("[fb-webhook] no fb_pages row for page_id:", webhookPageId);
         continue;
