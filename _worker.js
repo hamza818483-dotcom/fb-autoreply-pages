@@ -168,6 +168,46 @@ async function tgDebugGlobal(env, text) {
 
 // Query Supabase keyword_replies table directly (REST API — no DB driver,
 // no Postgres TCP connection needed, works reliably from CF).
+// Levenshtein edit distance — counts how many single-character edits
+// (insert/delete/substitute) turn string a into string b.
+function editDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array(n + 1).fill(0).map((_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(
+        prev[j] + 1,      // deletion
+        cur[j - 1] + 1,   // insertion
+        prev[j - 1] + cost // substitution
+      );
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// True if any word in the message is an exact or near-typo match (fuzzy)
+// for the keyword. Threshold scales with keyword length so short keywords
+// don't over-match (e.g. "hi" shouldn't fuzzy-match "him").
+function fuzzyContains(message, keyword) {
+  if (!keyword) return false;
+  if (message.includes(keyword)) return true; // exact substring — cheapest check first
+
+  const maxDist = keyword.length <= 3 ? 0 : keyword.length <= 6 ? 1 : 2;
+  if (maxDist === 0) return false; // too short to safely fuzzy-match
+
+  const words = message.split(/[^a-z0-9\u0980-\u09FF]+/i).filter(Boolean);
+  for (const w of words) {
+    if (Math.abs(w.length - keyword.length) > maxDist) continue; // quick skip
+    if (editDistance(w, keyword) <= maxDist) return true;
+  }
+  return false;
+}
+
 async function matchKeyword(message, pageId, env) {
   try {
     const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`;
@@ -187,7 +227,7 @@ async function matchKeyword(message, pageId, env) {
         .split(",")
         .map((k) => k.trim().toLowerCase())
         .filter(Boolean);
-      const hit = keywords.some((kw) => kw && message.includes(kw));
+      const hit = keywords.some((kw) => fuzzyContains(message, kw));
       if (hit) {
         return {
           reply: row.reply || "",
