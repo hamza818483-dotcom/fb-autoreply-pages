@@ -86,37 +86,50 @@ async function handleFbEvent(bodyText, env) {
           // Skip the page's own comments/replies (avoids reacting/replying to itself)
           if (fromId && fromId === webhookPageId) continue;
 
+          // One debug log per comment — accumulates steps, sent/edited as a
+          // single Telegram message instead of spamming one message per step.
+          const dlog = await Debug.start(env, webhookPageId, `Comment: "${message}"\nID: ${commentId}`);
+
           // Auto love-react on EVERY comment, regardless of keyword match
           const reactResult = await reactToComment(commentId, pageConfig.page_access_token, env);
           if (!reactResult || reactResult.error) {
-            await tgDebugGlobal(env, `[REACT-DEBUG] love-react FAILED comment=${commentId}\n${JSON.stringify(reactResult)}`, webhookPageId);
+            await dlog.add(`❌ Love-react FAILED\n${JSON.stringify(reactResult)}`);
+          } else {
+            await dlog.add(`✅ Reacted`);
           }
 
           const match = await matchKeyword(message, webhookPageId, env);
           if (match) {
+            await dlog.add(`✅ Keyword matched: "${match.matchedKeyword || ''}"`);
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
               const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
               const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
               if (!replyResult || replyResult.error) {
-                await tgDebugGlobal(env, `[REPLY-DEBUG] keyword-reply FAILED comment=${commentId}\n${JSON.stringify(replyResult)}`, webhookPageId);
+                await dlog.add(`❌ Keyword-reply FAILED\n${JSON.stringify(replyResult)}`);
+              } else {
+                await dlog.add(`✅ Replied (keyword)`);
               }
               await markReplied(commentId, env);
+            } else {
+              await dlog.add(`⏭ Already replied — skipped (duplicate)`);
             }
-            // Private reply disabled: requires Meta Business Verification
-            // (no business documents available). Public reply only for now.
           } else {
+            await dlog.add(`ℹ️ No keyword match — trying AI fallback`);
             // No keyword matched — try AI fallback reply if enabled for this page.
             const alreadyReplied = await hasReplied(commentId, env);
             if (!alreadyReplied) {
-              const aiReply = await generateAiReply(message, webhookPageId, env);
+              const aiReply = await generateAiReply(message, webhookPageId, env, dlog);
               if (aiReply) {
                 const replyText = fromId ? `@[${fromId}] ${aiReply}` : aiReply;
                 await replyToComment(commentId, replyText, pageConfig.page_access_token, env);
                 await markReplied(commentId, env);
+                await dlog.add(`✅ Replied (AI)`);
               } else {
-                await tgDebugGlobal(env, `[AI-DEBUG] generateAiReply returned null for message="${message}" page=${webhookPageId}`, webhookPageId);
+                await dlog.add(`❌ AI reply FAILED — no reply generated (see reasons above)`);
               }
+            } else {
+              await dlog.add(`⏭ Already replied — skipped (duplicate)`);
             }
           }
         }
@@ -154,6 +167,47 @@ async function getPageConfig(pageId, env) {
   }
 }
 
+// Accumulates all steps for one comment into a single Telegram message,
+// sent once and then edited in place as each step completes — avoids
+// spamming one message per step.
+const Debug = {
+  async start(env, pageId, headerText) {
+    const enabled = await isDebugEnabled(pageId, env);
+    if (!enabled || !env.DEBUG_BOT_TOKEN || !env.DEBUG_CHAT_ID) {
+      return { add: async () => {} }; // no-op logger when debug is off
+    }
+    const lines = [headerText];
+    let messageId = null;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: env.DEBUG_CHAT_ID, text: lines.join("\n") }),
+      });
+      const data = await res.json();
+      messageId = data.result && data.result.message_id;
+    } catch (e) {}
+
+    return {
+      async add(line) {
+        lines.push(line);
+        if (!messageId) return;
+        try {
+          await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/editMessageText`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: env.DEBUG_CHAT_ID,
+              message_id: messageId,
+              text: lines.join("\n").slice(0, 3900),
+            }),
+          });
+        } catch (e) {}
+      },
+    };
+  },
+};
+
 async function tgDebugGlobal(env, text, pageId) {
   if (!env.DEBUG_BOT_TOKEN || !env.DEBUG_CHAT_ID) return;
   if (pageId) {
@@ -179,8 +233,8 @@ async function isDebugEnabled(pageId, env) {
       }
     );
     const rows = await r.json();
-    if (!Array.isArray(rows) || rows.length === 0) return true; // default ON if no settings row yet
-    return rows[0].debug_alerts_enabled !== false;
+    if (!Array.isArray(rows) || rows.length === 0) return false; // default OFF if no settings row yet
+    return rows[0].debug_alerts_enabled === true;
   } catch (e) {
     return true; // fail open: better a stray debug message than losing real alerts
   }
@@ -247,11 +301,12 @@ async function matchKeyword(message, pageId, env) {
         .split(",")
         .map((k) => k.trim().toLowerCase())
         .filter(Boolean);
-      const hit = keywords.some((kw) => fuzzyContains(message, kw));
+      const hit = keywords.find((kw) => fuzzyContains(message, kw));
       if (hit) {
         return {
           reply: row.reply || "",
           private_reply: row.private_reply || row.reply || "",
+          matchedKeyword: hit,
         };
       }
     }
@@ -392,34 +447,42 @@ async function getAiSettings(pageId, env) {
   }
 }
 
-async function generateAiReply(message, pageId, env) {
+async function generateAiReply(message, pageId, env, dlog) {
+  const noop = { add: async () => {} };
+  const log = dlog || noop;
+
   const settings = await getAiSettings(pageId, env);
   if (!settings) {
-    await tgDebugGlobal(env, `[AI-DEBUG] no ai_settings row for page=${pageId} — AI reply not configured`, pageId);
+    await log.add(`❌ AI not configured for this page (no ai_settings row)`);
     return null;
   }
   if (!settings.ai_enabled) {
-    await tgDebugGlobal(env, `[AI-DEBUG] ai_settings found for page=${pageId} but ai_enabled=false`, pageId);
+    await log.add(`❌ AI reply is turned OFF for this page`);
     return null;
   }
 
   const systemPrompt = settings.system_prompt || "You are a helpful Facebook page assistant. Reply briefly and politely in the same language as the comment.";
   const geminiKeys = settings.gemini_enabled !== false ? (settings.gemini_keys || "").split(",").map(k => k.trim()).filter(Boolean) : [];
   const groqKeys = settings.groq_enabled !== false ? (settings.groq_keys || "").split(",").map(k => k.trim()).filter(Boolean) : [];
-  await tgDebugGlobal(env, `[AI-DEBUG] ai_enabled=true geminiKeys=${geminiKeys.length}(enabled=${settings.gemini_enabled !== false}) groqKeys=${groqKeys.length}(enabled=${settings.groq_enabled !== false})`, pageId);
 
-  for (const key of geminiKeys) {
-    const reply = await tryGemini(key, systemPrompt, message, env);
-    if (reply) return reply;
+  if (geminiKeys.length === 0 && groqKeys.length === 0) {
+    await log.add(`❌ No AI provider keys configured/enabled (Gemini: ${geminiKeys.length}, Groq: ${groqKeys.length})`);
+    return null;
   }
-  for (const key of groqKeys) {
-    const reply = await tryGroq(key, systemPrompt, message, env);
-    if (reply) return reply;
+
+  for (let i = 0; i < geminiKeys.length; i++) {
+    const reply = await tryGemini(geminiKeys[i], systemPrompt, message, log, i + 1, geminiKeys.length);
+    if (reply) { await log.add(`✅ Gemini key #${i + 1} succeeded`); return reply; }
   }
+  for (let i = 0; i < groqKeys.length; i++) {
+    const reply = await tryGroq(groqKeys[i], systemPrompt, message, log, i + 1, groqKeys.length);
+    if (reply) { await log.add(`✅ Groq key #${i + 1} succeeded`); return reply; }
+  }
+  await log.add(`❌ All AI providers failed (Gemini: ${geminiKeys.length} tried, Groq: ${groqKeys.length} tried)`);
   return null;
 }
 
-async function tryGemini(apiKey, systemPrompt, message, env) {
+async function tryGemini(apiKey, systemPrompt, message, log, idx, total) {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
@@ -437,21 +500,21 @@ async function tryGemini(apiKey, systemPrompt, message, env) {
     if (!res.ok) {
       const errText = await res.text();
       console.error("[fb-webhook] Gemini failed:", res.status, errText);
-      if (env) await tgDebugGlobal(env, `[AI-DEBUG] Gemini call FAILED status=${res.status}\n${errText.slice(0,400)}`);
+      if (log) await log.add(`❌ Gemini key #${idx}/${total} FAILED — HTTP ${res.status}\n${errText.slice(0,300)}`);
       return null;
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text && env) await tgDebugGlobal(env, `[AI-DEBUG] Gemini responded but no text found: ${JSON.stringify(data).slice(0,400)}`);
+    if (!text && log) await log.add(`❌ Gemini key #${idx}/${total} — got response but no text (likely blocked/empty): ${JSON.stringify(data).slice(0,300)}`);
     return text ? text.trim() : null;
   } catch (e) {
     console.error("[fb-webhook] tryGemini error:", e.message);
-    if (env) await tgDebugGlobal(env, `[AI-DEBUG] Gemini exception: ${e.message}`);
+    if (log) await log.add(`❌ Gemini key #${idx}/${total} — exception: ${e.message}`);
     return null;
   }
 }
 
-async function tryGroq(apiKey, systemPrompt, message, env) {
+async function tryGroq(apiKey, systemPrompt, message, log, idx, total) {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -472,16 +535,16 @@ async function tryGroq(apiKey, systemPrompt, message, env) {
     if (!res.ok) {
       const errText = await res.text();
       console.error("[fb-webhook] Groq failed:", res.status, errText);
-      if (env) await tgDebugGlobal(env, `[AI-DEBUG] Groq call FAILED status=${res.status} key=...${apiKey.slice(-6)}\n${errText.slice(0,400)}`);
+      if (log) await log.add(`❌ Groq key #${idx}/${total} (...${apiKey.slice(-6)}) FAILED — HTTP ${res.status}\n${errText.slice(0,300)}`);
       return null;
     }
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content;
-    if (!text && env) await tgDebugGlobal(env, `[AI-DEBUG] Groq responded but no text found: ${JSON.stringify(data).slice(0,400)}`);
+    if (!text && log) await log.add(`❌ Groq key #${idx}/${total} — got response but no text: ${JSON.stringify(data).slice(0,300)}`);
     return text ? text.trim() : null;
   } catch (e) {
     console.error("[fb-webhook] tryGroq error:", e.message);
-    if (env) await tgDebugGlobal(env, `[AI-DEBUG] Groq exception: ${e.message}`);
+    if (log) await log.add(`❌ Groq key #${idx}/${total} — exception: ${e.message}`);
     return null;
   }
 }

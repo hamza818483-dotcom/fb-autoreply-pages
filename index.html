@@ -503,7 +503,7 @@ async function loadAiSettings(){
   $('groqKeys').value = data ? (data.groq_keys || '') : '';
   $('geminiEnabled').checked = data ? data.gemini_enabled !== false : true;
   $('groqEnabled').checked = data ? data.groq_enabled !== false : true;
-  $('debugEnabled').checked = data ? data.debug_alerts_enabled !== false : true;
+  $('debugEnabled').checked = data ? data.debug_alerts_enabled === true : false;
 }
 
 $('saveAiBtn').onclick = async () => {
