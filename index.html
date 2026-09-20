@@ -217,6 +217,12 @@
 
           <button id="saveAiBtn">সেভ করুন</button>
           <div class="helper" id="aiMsg"></div>
+
+          <div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)">
+            <label style="margin-bottom:0;flex:1">🔔 Debug alert (Telegram-এ error/status message)</label>
+            <input type="checkbox" id="debugEnabled" style="width:auto;margin-bottom:0" />
+          </div>
+          <p class="helper" style="margin-top:2px">বন্ধ করলে keyword/AI match না হলে বা কোনো সমস্যা হলে Telegram-এ বার্তা যাবে না</p>
         </div>
       </section>
 
@@ -497,6 +503,7 @@ async function loadAiSettings(){
   $('groqKeys').value = data ? (data.groq_keys || '') : '';
   $('geminiEnabled').checked = data ? data.gemini_enabled !== false : true;
   $('groqEnabled').checked = data ? data.groq_enabled !== false : true;
+  $('debugEnabled').checked = data ? data.debug_alerts_enabled !== false : true;
 }
 
 $('saveAiBtn').onclick = async () => {
@@ -509,6 +516,7 @@ $('saveAiBtn').onclick = async () => {
     groq_keys: $('groqKeys').value.trim(),
     gemini_enabled: $('geminiEnabled').checked,
     groq_enabled: $('groqEnabled').checked,
+    debug_alerts_enabled: $('debugEnabled').checked,
     updated_at: new Date().toISOString(),
   };
   const { error } = await sb.from('ai_settings').upsert(payload, { onConflict: 'page_id' });
