@@ -5,112 +5,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FB Auto-Reply Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0a0b0d; --panel:#131519; --panel-2:#191c21; --panel-3:#1f232a; --border:#23262d; --border-soft:#1c1f25;
-    --text:#f2f3f5; --text-dim:#c9cdd4; --muted:#80868f; --accent:#6c8cff; --accent-hover:#5878e6;
-    --danger:#f0576a; --ok:#3fc98a; --radius:14px; --radius-sm:10px;
+    --navy:#0F172A; --indigo:#312E81; --accent:#3B5BFF; --accent-hover:#2E47D9; --accent-soft:#EEF1FF;
+    --bg:#F8FAFC; --card:#FFFFFF; --border:#E2E8F0; --border-soft:#EDF1F6;
+    --text:#0F172A; --text-dim:#334155; --muted:#64748B;
+    --success:#16A34A; --success-soft:#F0FDF4; --warning:#F59E0B; --error:#DC2626; --error-soft:#FEF2F2;
+    --radius:16px; --radius-sm:12px; --radius-lg:18px;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+    --shadow-md:0 4px 16px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+    --shadow-lg:0 12px 32px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.05);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:.01ms !important; transition-duration:.01ms !important;} }
   body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
-    min-height:100vh;
-    -webkit-font-smoothing:antialiased;
+    background:var(--bg); color:var(--text);
+    font-family:'Inter','Hind Siliguri',-apple-system,'Segoe UI',system-ui,sans-serif;
+    min-height:100vh; -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px}
-  h1{font-size:21px;margin:0 0 4px;letter-spacing:-.015em;font-weight:600}
+  ::selection{background:var(--accent-soft);color:var(--indigo)}
+  .wrap{max-width:420px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}
   .sub{color:var(--muted);font-size:13.5px;margin:0 0 28px;line-height:1.5}
-  .card{background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--radius);padding:22px;margin-bottom:14px}
-  label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px;font-weight:500;letter-spacing:.01em}
-  input,textarea,select{
-    width:100%;padding:11px 13px;background:var(--panel-2);border:1px solid var(--border);
-    border-radius:var(--radius-sm);color:var(--text);font-size:15px;margin-bottom:14px;font-family:inherit;
-    transition:border-color .15s,background .15s
+  .card{
+    background:var(--card); border:1px solid var(--border-soft); border-radius:var(--radius);
+    padding:22px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+    animation:fadeIn .35s ease both;
   }
-  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);background:var(--panel-3)}
-  input::placeholder,textarea::placeholder{color:var(--muted)}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @keyframes fadeSlideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;font-weight:600;letter-spacing:.01em}
+  input,textarea,select{
+    width:100%;padding:11px 13px;background:#fff;border:1.5px solid var(--border);
+    border-radius:var(--radius-sm);color:var(--text);font-size:15px;margin-bottom:14px;font-family:inherit;
+    transition:border-color .15s ease,box-shadow .15s ease
+  }
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  input::placeholder,textarea::placeholder{color:#A0AEC0}
   textarea{resize:vertical;min-height:76px;line-height:1.5}
   button{
     background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 18px;
-    font-size:14px;cursor:pointer;font-weight:600;transition:background .15s;font-family:inherit
+    font-size:14px;cursor:pointer;font-weight:600;font-family:inherit;
+    transition:background .15s ease,transform .1s ease,box-shadow .15s ease;
+    box-shadow:0 1px 2px rgba(59,91,255,.15);
   }
   button:hover{background:var(--accent-hover)}
-  button.secondary{background:transparent;border:1px solid var(--border);color:var(--text-dim)}
-  button.secondary:hover{background:var(--panel-2);border-color:var(--muted);color:var(--text)}
-  button.danger{background:transparent;border:1px solid var(--border);color:var(--danger)}
-  button.danger:hover{background:rgba(240,87,106,.08);border-color:var(--danger)}
+  button:active{transform:scale(.98)}
+  button.secondary{background:#fff;border:1.5px solid var(--border);color:var(--text-dim);box-shadow:none}
+  button.secondary:hover{background:#F8FAFC;border-color:#CBD5E1;color:var(--text)}
+  button.danger{background:#fff;border:1.5px solid var(--border);color:var(--error);box-shadow:none}
+  button.danger:hover{background:var(--error-soft);border-color:var(--error)}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .kw-item{border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:16px;margin-bottom:8px;background:var(--panel-2)}
-  .kw-item .kw{font-weight:600;color:var(--accent);font-size:12.5px;margin-bottom:8px;letter-spacing:.01em}
+  .kw-item{
+    border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:16px;margin-bottom:8px;
+    background:#fff; transition:box-shadow .15s ease, transform .15s ease;
+  }
+  .kw-item:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+  .kw-item .kw{font-weight:700;color:var(--accent);font-size:12.5px;margin-bottom:8px;letter-spacing:.01em}
   .kw-item .reply{font-size:14px;color:var(--text-dim);white-space:pre-wrap;margin-bottom:12px;line-height:1.55}
-  .msg{font-size:13px;padding:10px 13px;border-radius:var(--radius-sm);margin-bottom:14px}
-  .msg.err{background:rgba(240,87,106,.08);color:#ff9aa8;border:1px solid rgba(240,87,106,.2)}
-  .msg.ok{background:rgba(63,201,138,.08);color:#7de6b4;border:1px solid rgba(63,201,138,.2)}
-  .hidden{display:none}
+  .msg{font-size:13px;padding:10px 13px;border-radius:var(--radius-sm);margin-bottom:14px;animation:fadeIn .2s ease both}
+  .msg.err{background:var(--error-soft);color:#B91C1C;border:1px solid #FECACA}
+  .msg.ok{background:var(--success-soft);color:#15803D;border:1px solid #BBF7D0}
+  .hidden{display:none !important}
   .muted-block{color:var(--muted);font-size:13px;padding:26px 20px;text-align:center}
   select#pageSelect{margin-bottom:0}
   .page-header{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
   .page-header select{margin-bottom:0;flex:1}
-  h2{font-size:14.5px;margin:0 0 16px;color:var(--text);font-weight:600;letter-spacing:-.005em}
+  h2{font-size:15px;margin:0 0 16px;color:var(--text);font-weight:700;letter-spacing:-.01em}
   .helper{font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:14px;line-height:1.5}
   .login-shell{min-height:100vh;display:flex;align-items:center;justify-content:center}
   .login-card{max-width:380px;width:100%}
   .brand{text-align:center;margin-bottom:28px}
   .brand .mark{
-    width:46px;height:46px;border-radius:12px;margin:0 auto 16px;
-    background:var(--panel-2);border:1px solid var(--border);
-    display:flex;align-items:center;justify-content:center;color:var(--accent)
+    width:52px;height:52px;border-radius:16px;margin:0 auto 16px;
+    background:linear-gradient(135deg,var(--accent),var(--indigo));
+    display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:var(--shadow-md)
   }
   .brand h1{margin-bottom:6px}
 
-  /* App shell: fixed top bar + full-width scrolling content, no sidebar */
   .topbar{
-    position:sticky;top:0;z-index:40;background:rgba(10,11,13,.92);backdrop-filter:blur(10px);
+    position:sticky;top:0;z-index:40;background:rgba(248,250,252,.85);backdrop-filter:blur(10px);
     border-bottom:1px solid var(--border-soft);
-    display:flex;align-items:center;gap:12px;padding:14px 20px
+    display:flex;align-items:center;gap:12px;padding:14px 20px;
+    transition:box-shadow .2s ease;
   }
+  .topbar.scrolled{box-shadow:var(--shadow-sm)}
   .topbar .mark{
-    width:32px;height:32px;border-radius:9px;background:var(--panel-2);border:1px solid var(--border);
-    display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,var(--accent),var(--indigo));
+    display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0
   }
-  .topbar .brand-label{font-weight:600;font-size:14.5px;letter-spacing:-.01em;flex:1}
+  .topbar .brand-label{font-weight:700;font-size:15px;letter-spacing:-.01em;flex:1;color:var(--text)}
   .whoami{color:var(--muted);font-size:12.5px;display:none}
   .topbar button{padding:8px 14px;font-size:13px}
   .main{max-width:640px;margin:0 auto;padding:24px 20px 80px}
-  .section{margin-bottom:6px}
+  .section{margin-bottom:6px;animation:fadeSlideUp .3s ease both}
   .section-title{
     font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
-    font-weight:600;margin:0 0 14px;padding-top:26px
+    font-weight:700;margin:0 0 14px;padding-top:26px
   }
   .section:first-of-type .section-title{padding-top:0}
   .page-switcher{margin-bottom:22px}
   .page-switcher label{font-size:11.5px;text-transform:none}
 
-  @media (min-width: 561px){
-    .whoami{display:inline}
+  .feature-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px}
+  @media (min-width:640px){ .feature-grid{grid-template-columns:repeat(3,1fr)} }
+  .feature-card{
+    background:var(--card); border:1px solid var(--border-soft); border-radius:var(--radius-lg);
+    padding:24px 20px; cursor:pointer; text-align:left; width:100%;
+    box-shadow:var(--shadow-sm); transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden;
+    animation:fadeSlideUp .35s ease both;
   }
+  .feature-card:nth-child(1){animation-delay:.03s}
+  .feature-card:nth-child(2){animation-delay:.09s}
+  .feature-card:nth-child(3){animation-delay:.15s}
+  .feature-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:#DCE3F5}
+  .feature-card:active{transform:translateY(-1px) scale(.99)}
+  .feature-card .ic{
+    width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    background:var(--accent-soft);color:var(--accent);flex-shrink:0;
+  }
+  .feature-card .ic svg{width:24px;height:24px}
+  .feature-card .ftitle{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+  .feature-card .fdesc{font-size:13px;color:var(--muted);line-height:1.5;margin-top:-6px}
+  .feature-card .fmeta{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent);font-weight:600;margin-top:auto}
+  .feature-card .fmeta svg{width:14px;height:14px;transition:transform .15s ease}
+  .feature-card:hover .fmeta svg{transform:translateX(3px)}
+  .feature-card .badge{
+    position:absolute; top:16px; right:16px; font-size:11px; font-weight:700; padding:3px 9px;
+    border-radius:999px; background:var(--success-soft); color:var(--success);
+  }
+  .feature-card .badge.off{background:#F1F5F9;color:var(--muted)}
+
+  .back-link{
+    display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:13.5px; font-weight:600;
+    cursor:pointer; margin-bottom:18px; transition:color .15s ease; user-select:none;
+  }
+  .back-link:hover{color:var(--accent)}
+  .back-link svg{width:16px;height:16px}
+
+  .feature-header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .feature-header .ic{
+    width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    background:var(--accent-soft);color:var(--accent);flex-shrink:0;
+  }
+  .feature-header .ic svg{width:20px;height:20px}
+  .feature-header h1{margin:0;font-size:19px}
+  .feature-header p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+
+  .toggle-row{display:flex;align-items:center;gap:10px}
+  .toggle{
+    position:relative;width:42px;height:24px;border-radius:999px;background:#CBD5E1;flex-shrink:0;
+    cursor:pointer;transition:background .2s ease;border:none;padding:0;box-shadow:none;
+  }
+  .toggle::after{
+    content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+    background:#fff;transition:transform .2s ease;box-shadow:0 1px 3px rgba(0,0,0,.2);
+  }
+  .toggle.on{background:var(--accent)}
+  .toggle.on::after{transform:translateX(18px)}
+  input[type=checkbox].toggle-input{display:none}
+
+  .stat-box{background:var(--accent-soft);border-radius:var(--radius-sm);padding:14px 16px}
+  .stat-box .n{font-size:20px;font-weight:800;color:var(--indigo)}
+  .stat-box .l{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+  .icon-inline{width:16px;height:16px;vertical-align:-3px;margin-right:4px;display:inline-block}
+
+  @media (min-width: 561px){ .whoami{display:inline} }
   @media (max-width: 560px){
     .main{padding:20px 16px 70px}
     .topbar{padding:12px 16px}
     .card{padding:18px;border-radius:12px}
+    .feature-card{padding:20px 16px}
   }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- LOGIN VIEW -->
   <div id="loginView" class="hidden">
     <div class="login-shell">
       <div class="login-card">
         <div class="brand">
-          <div class="mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div class="mark"><i data-lucide="message-circle" style="width:24px;height:24px"></i></div>
           <h1>FB Auto-Reply</h1>
           <p class="sub">Comment keyword ও reply নিয়ন্ত্রণ করুন এখান থেকে</p>
         </div>
@@ -130,16 +214,14 @@
   </div>
 </div>
 
-<!-- DASHBOARD VIEW: outside .wrap so the topbar can go full width -->
 <div id="dashView" class="hidden">
-  <header class="topbar">
-      <div class="mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+  <header class="topbar" id="topbar">
+      <div class="mark"><i data-lucide="message-circle" style="width:18px;height:18px"></i></div>
       <span class="brand-label">FB Auto-Reply</span>
       <span class="whoami" id="whoami"></span>
       <button class="secondary" id="logoutBtn">লগআউট</button>
   </header>
 
-    <!-- Main: full width single scroll -->
     <main class="main">
       <div class="page-switcher" id="pageSwitcherWrap">
         <label>সক্রিয় পেজ</label>
@@ -150,7 +232,7 @@
         <h2 class="section-title">Page</h2>
         <div class="card">
           <div class="page-header" style="margin-bottom:0">
-            <h2 style="margin:0;flex:1">Facebook Page যোগ করুন</h2>
+            <h2 style="margin:0;flex:1"><i data-lucide="facebook" class="icon-inline"></i>Facebook Page যোগ করুন</h2>
             <button class="secondary" id="addPageBtn">+ নতুন পেজ</button>
           </div>
           <div id="addPageForm" class="hidden" style="margin-top:16px">
@@ -168,8 +250,45 @@
         </div>
       </section>
 
-      <section id="secKeywords" class="section">
-        <h2 class="section-title">Keywords</h2>
+      <section id="secHome" class="section">
+        <h2 class="section-title">Features</h2>
+        <div class="feature-grid">
+
+          <button type="button" class="feature-card" data-target="keywords">
+            <span class="badge" id="kwBadge">—</span>
+            <div class="ic"><i data-lucide="message-square-text"></i></div>
+            <div class="ftitle">Keyword Reply</div>
+            <div class="fdesc">নির্দিষ্ট শব্দ কমেন্টে এলে অটো রিপ্লাই পাঠান</div>
+            <div class="fmeta">পরিচালনা করুন <i data-lucide="arrow-right"></i></div>
+          </button>
+
+          <button type="button" class="feature-card" data-target="ai">
+            <span class="badge off" id="aiBadge">বন্ধ</span>
+            <div class="ic"><i data-lucide="sparkles"></i></div>
+            <div class="ftitle">AI Reply</div>
+            <div class="fdesc">Keyword না মিললে AI দিয়ে স্মার্ট রিপ্লাই জেনারেট করুন</div>
+            <div class="fmeta">পরিচালনা করুন <i data-lucide="arrow-right"></i></div>
+          </button>
+
+          <button type="button" class="feature-card" data-target="export">
+            <div class="ic"><i data-lucide="download"></i></div>
+            <div class="ftitle">Comment Collector</div>
+            <div class="fdesc">পোস্টের সব কমেন্ট CSV করে Random Winner-এ ব্যবহার করুন</div>
+            <div class="fmeta">পরিচালনা করুন <i data-lucide="arrow-right"></i></div>
+          </button>
+
+        </div>
+      </section>
+
+      <section id="secKeywords" class="section feature-section hidden">
+        <div class="back-link" data-back="home"><i data-lucide="arrow-left"></i>Dashboard-এ ফিরুন</div>
+        <div class="feature-header">
+          <div class="ic"><i data-lucide="message-square-text"></i></div>
+          <div>
+            <h1>Keyword Reply</h1>
+            <p>নির্দিষ্ট শব্দ অনুযায়ী অটো রিপ্লাই সেট করুন</p>
+          </div>
+        </div>
         <div class="card">
           <h2 id="kwFormTitle">Keyword → Reply যোগ করুন</h2>
           <label>Keyword (কমা দিয়ে একাধিক লিখুন)</label>
@@ -188,60 +307,76 @@
         </div>
       </section>
 
-      <section id="secAi" class="section">
-        <h2 class="section-title">AI Reply</h2>
+      <section id="secAi" class="section feature-section hidden">
+        <div class="back-link" data-back="home"><i data-lucide="arrow-left"></i>Dashboard-এ ফিরুন</div>
+        <div class="feature-header">
+          <div class="ic"><i data-lucide="sparkles"></i></div>
+          <div>
+            <h1>AI Reply</h1>
+            <p>Keyword match না হলে AI দিয়ে রিপ্লাই দিন</p>
+          </div>
+        </div>
         <div class="card">
-          <h2>AI Reply (keyword match না হলে)</h2>
-          <div class="row" style="margin-bottom:14px">
-            <label style="margin-bottom:0;flex:1">AI reply চালু করুন</label>
-            <input type="checkbox" id="aiEnabled" style="width:auto;margin-bottom:0" />
+          <div class="row" style="margin-bottom:18px;justify-content:space-between">
+            <label style="margin-bottom:0">AI reply চালু করুন</label>
+            <button type="button" class="toggle" id="aiEnabledToggle"></button>
+            <input type="checkbox" id="aiEnabled" class="toggle-input" />
           </div>
           <label>System Prompt (bot কেমন reply দেবে তা লিখুন)</label>
           <textarea id="aiPrompt" placeholder="তুমি একটা Facebook page assistant। বাংলায় সংক্ষেপে, ভদ্রভাবে reply দেবে..." style="min-height:90px"></textarea>
 
-          <div class="row" style="margin-bottom:7px">
-            <label style="margin-bottom:0;flex:1">Gemini API Keys (কমা দিয়ে একাধিক)</label>
-            <label style="margin-bottom:0;display:flex;align-items:center;gap:6px;width:auto">
-              <input type="checkbox" id="geminiEnabled" style="width:auto;margin-bottom:0" /> সক্রিয়
-            </label>
+          <div class="row" style="margin-bottom:7px;justify-content:space-between">
+            <label style="margin-bottom:0">Gemini API Keys (কমা দিয়ে একাধিক)</label>
+            <div class="row" style="gap:6px">
+              <button type="button" class="toggle" id="geminiEnabledToggle"></button>
+              <input type="checkbox" id="geminiEnabled" class="toggle-input" />
+            </div>
           </div>
           <input type="text" id="geminiKeys" placeholder="AIzaSy..., AIzaSy..." />
 
-          <div class="row" style="margin-bottom:7px">
-            <label style="margin-bottom:0;flex:1">Groq API Keys (কমা দিয়ে একাধিক)</label>
-            <label style="margin-bottom:0;display:flex;align-items:center;gap:6px;width:auto">
-              <input type="checkbox" id="groqEnabled" style="width:auto;margin-bottom:0" /> সক্রিয়
-            </label>
+          <div class="row" style="margin-bottom:7px;justify-content:space-between">
+            <label style="margin-bottom:0">Groq API Keys (কমা দিয়ে একাধিক)</label>
+            <div class="row" style="gap:6px">
+              <button type="button" class="toggle" id="groqEnabledToggle"></button>
+              <input type="checkbox" id="groqEnabled" class="toggle-input" />
+            </div>
           </div>
           <input type="text" id="groqKeys" placeholder="gsk_..., gsk_..." />
 
           <button id="saveAiBtn">সেভ করুন</button>
           <div class="helper" id="aiMsg"></div>
 
-          <div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)">
-            <label style="margin-bottom:0;flex:1">🔔 Debug alert (Telegram-এ error/status message)</label>
-            <input type="checkbox" id="debugEnabled" style="width:auto;margin-bottom:0" />
+          <div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);justify-content:space-between">
+            <label style="margin-bottom:0"><i data-lucide="bell" class="icon-inline"></i>Debug alert (Telegram-এ error/status message)</label>
+            <button type="button" class="toggle" id="debugEnabledToggle"></button>
+            <input type="checkbox" id="debugEnabled" class="toggle-input" />
           </div>
-          <p class="helper" style="margin-top:2px">বন্ধ করলে keyword/AI match না হলে বা কোনো সমস্যা হলে Telegram-এ বার্তা যাবে না</p>
+          <p class="helper" style="margin-top:8px">বন্ধ করলে keyword/AI match না হলে বা কোনো সমস্যা হলে Telegram-এ বার্তা যাবে না</p>
         </div>
       </section>
 
-      <section id="secExport" class="section">
-        <h2 class="section-title">Comment Export</h2>
+      <section id="secExport" class="section feature-section hidden">
+        <div class="back-link" data-back="home"><i data-lucide="arrow-left"></i>Dashboard-এ ফিরুন</div>
+        <div class="feature-header">
+          <div class="ic"><i data-lucide="download"></i></div>
+          <div>
+            <h1>Comment Collector</h1>
+            <p>পোস্টের কমেন্ট CSV করুন (Random Winner-এর জন্য)</p>
+          </div>
+        </div>
         <div class="card">
-          <h2>পোস্টের কমেন্ট CSV করুন (Random Winner-এর জন্য)</h2>
           <p class="helper" style="margin-top:0">পোস্টের লিংক বা আইডি দিন — সব কমেন্টারের নাম + কমেন্ট একটা CSV ফাইলে পাবেন, যেটা lms-1 এর Random Winner-এ আপলোড করে স্পিন করে বিজয়ী বাছাই করা যাবে।</p>
           <label>পোস্ট লিংক / আইডি</label>
           <input type="text" id="exportPostUrl" placeholder="https://www.facebook.com/.../posts/123456789 অথবা শুধু আইডি" />
-          <button id="exportBtn">কমেন্ট আনুন</button>
+          <button id="exportBtn"><i data-lucide="download" class="icon-inline"></i>কমেন্ট আনুন</button>
           <div class="helper" id="exportMsg"></div>
           <div id="exportStats" class="hidden" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-soft)">
-            <div class="row" style="gap:20px;margin-bottom:10px">
-              <div><div style="font-size:12px;color:var(--muted)">মোট কমেন্ট</div><div style="font-size:20px;font-weight:700" id="statTotal">—</div></div>
-              <div><div style="font-size:12px;color:var(--muted)">ইউনিক কমেন্টকারী</div><div style="font-size:20px;font-weight:700" id="statUnique">—</div></div>
-              <div><div style="font-size:12px;color:var(--muted)">সর্বোচ্চ কমেন্ট</div><div style="font-size:14px;font-weight:600" id="statTop">—</div></div>
+            <div class="row" style="gap:12px;margin-bottom:14px">
+              <div class="stat-box" style="flex:1"><div class="n" id="statTotal">—</div><div class="l">মোট কমেন্ট</div></div>
+              <div class="stat-box" style="flex:1"><div class="n" id="statUnique">—</div><div class="l">ইউনিক কমেন্টকারী</div></div>
+              <div class="stat-box" style="flex:1.4"><div class="n" style="font-size:14px" id="statTop">—</div><div class="l">সর্বোচ্চ কমেন্ট</div></div>
             </div>
-            <button class="secondary" id="downloadCsvBtn">CSV ডাউনলোড করুন</button>
+            <button class="secondary" id="downloadCsvBtn"><i data-lucide="file-down" class="icon-inline"></i>CSV ডাউনলোড করুন</button>
           </div>
         </div>
       </section>
@@ -249,7 +384,7 @@
       <section id="secTeam" class="section">
         <h2 class="section-title">Team Access</h2>
         <div class="card">
-          <h2>নতুন Admin যোগ করুন</h2>
+          <h2><i data-lucide="user-plus" class="icon-inline"></i>নতুন Admin যোগ করুন</h2>
           <p class="helper" style="margin-top:0">এই email দিয়ে signup করলে সে সরাসরি এই পেজের access পেয়ে যাবে, নতুন করে পেজ সেটআপ করতে হবে না।</p>
           <label>Email</label>
           <input type="email" id="inviteEmail" placeholder="colleague@example.com" />
@@ -274,11 +409,63 @@ let currentPageId = null;
 
 const $ = (id) => document.getElementById(id);
 
+function icons(){ if (window.lucide) lucide.createIcons(); }
+
 function showMsg(el, text, ok=false){
   el.innerHTML = `<div class="msg ${ok?'ok':'err'}">${text}</div>`;
 }
 
+const FEATURE_SECTIONS = { keywords: 'secKeywords', ai: 'secAi', export: 'secExport' };
+
+function goToFeature(key){
+  $('secHome').classList.add('hidden');
+  $('secPage').classList.add('hidden');
+  $('secTeam').classList.add('hidden');
+  $('pageSwitcherWrap').classList.add('hidden');
+  Object.values(FEATURE_SECTIONS).forEach(id => $(id).classList.add('hidden'));
+  const target = FEATURE_SECTIONS[key];
+  if (target) $(target).classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goHome(){
+  Object.values(FEATURE_SECTIONS).forEach(id => $(id).classList.add('hidden'));
+  $('secHome').classList.remove('hidden');
+  $('secPage').classList.remove('hidden');
+  $('secTeam').classList.remove('hidden');
+  $('pageSwitcherWrap').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.querySelectorAll('.feature-card').forEach(card => {
+  card.addEventListener('click', () => goToFeature(card.dataset.target));
+});
+document.querySelectorAll('[data-back="home"]').forEach(el => {
+  el.addEventListener('click', goHome);
+});
+
+window.addEventListener('scroll', () => {
+  $('topbar') && $('topbar').classList.toggle('scrolled', window.scrollY > 4);
+});
+
+function wireToggle(toggleId, checkboxId, onChange){
+  const btn = $(toggleId), cb = $(checkboxId);
+  function render(){ btn.classList.toggle('on', cb.checked); }
+  btn.addEventListener('click', () => {
+    cb.checked = !cb.checked;
+    render();
+    if (onChange) onChange(cb.checked);
+  });
+  render();
+  return render;
+}
+const renderAiToggle = wireToggle('aiEnabledToggle', 'aiEnabled');
+const renderGeminiToggle = wireToggle('geminiEnabledToggle', 'geminiEnabled');
+const renderGroqToggle = wireToggle('groqEnabledToggle', 'groqEnabled');
+const renderDebugToggle = wireToggle('debugEnabledToggle', 'debugEnabled');
+
 async function init(){
+  icons();
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     showDashboard(session);
@@ -300,7 +487,9 @@ async function showDashboard(session){
   $('loginView').classList.add('hidden');
   $('dashView').classList.remove('hidden');
   $('whoami').textContent = session.user.email;
+  goHome();
   await loadPages();
+  icons();
 }
 
 $('loginBtn').onclick = async () => {
@@ -323,7 +512,6 @@ $('logoutBtn').onclick = async () => {
   await sb.auth.signOut();
 };
 
-// ---- Pages ----
 async function loadPages(){
   const { data, error } = await sb.from('fb_pages').select('*').order('created_at');
   if (error) { console.error(error); return; }
@@ -375,15 +563,18 @@ $('savePageBtn').onclick = async () => {
   await loadPages();
 };
 
-// ---- Keywords ----
 let editingKwId = null;
 
 async function loadKeywords(){
-  if (!currentPageId) return;
+  if (!currentPageId) { $('kwBadge').textContent = '—'; return; }
   $('kwList').innerHTML = '<div class="muted-block">লোড হচ্ছে...</div>';
   const { data, error } = await sb.from('keyword_replies')
     .select('*').eq('page_id', currentPageId).order('created_at', { ascending: false });
   if (error) { $('kwList').innerHTML = `<div class="muted-block">${error.message}</div>`; return; }
+  const count = data ? data.length : 0;
+  const badge = $('kwBadge');
+  badge.textContent = count > 0 ? `${count} সক্রিয়` : 'খালি';
+  badge.classList.toggle('off', count === 0);
   if (!data || data.length === 0) {
     $('kwList').innerHTML = '<div class="muted-block">এখনো কোনো keyword যোগ করা হয়নি</div>';
     return;
@@ -458,7 +649,6 @@ $('addKwBtn').onclick = async () => {
 
 init();
 
-// ---- Team Access ----
 async function loadTeam(){
   if (!currentPageId) return;
   $('teamList').innerHTML = '<div class="muted-block">লোড হচ্ছে...</div>';
@@ -494,13 +684,11 @@ $('inviteBtn').onclick = async () => {
   if (!email) { showMsg($('inviteMsg'), 'ইমেইল দিন'); return; }
   const { data: { user } } = await sb.auth.getUser();
 
-  // Allow this email to sign up
   const { error: allowErr } = await sb.from('allowed_emails').insert({ email });
   if (allowErr && !String(allowErr.message).includes('duplicate')) {
     showMsg($('inviteMsg'), allowErr.message); return;
   }
 
-  // Grant access to this page
   const { error } = await sb.from('page_access').insert({
     page_id: currentPageId, invited_email: email, granted_by: user.id
   });
@@ -511,19 +699,23 @@ $('inviteBtn').onclick = async () => {
   await loadTeam();
 };
 
-
-// ---- AI Settings ----
 async function loadAiSettings(){
   if (!currentPageId) return;
   const { data, error } = await sb.from('ai_settings').select('*').eq('page_id', currentPageId).maybeSingle();
   if (error) { console.error(error); return; }
-  $('aiEnabled').checked = data ? !!data.ai_enabled : false;
+  const aiOn = data ? !!data.ai_enabled : false;
+  $('aiEnabled').checked = aiOn;
   $('aiPrompt').value = data ? (data.system_prompt || '') : '';
   $('geminiKeys').value = data ? (data.gemini_keys || '') : '';
   $('groqKeys').value = data ? (data.groq_keys || '') : '';
   $('geminiEnabled').checked = data ? data.gemini_enabled !== false : true;
   $('groqEnabled').checked = data ? data.groq_enabled !== false : true;
   $('debugEnabled').checked = data ? data.debug_alerts_enabled === true : false;
+  renderAiToggle(); renderGeminiToggle(); renderGroqToggle(); renderDebugToggle();
+
+  const badge = $('aiBadge');
+  badge.textContent = aiOn ? 'চালু' : 'বন্ধ';
+  badge.classList.toggle('off', !aiOn);
 }
 
 $('saveAiBtn').onclick = async () => {
@@ -542,9 +734,11 @@ $('saveAiBtn').onclick = async () => {
   const { error } = await sb.from('ai_settings').upsert(payload, { onConflict: 'page_id' });
   if (error) { showMsg($('aiMsg'), error.message); return; }
   showMsg($('aiMsg'), 'সেভ হয়েছে', true);
+  const badge = $('aiBadge');
+  badge.textContent = payload.ai_enabled ? 'চালু' : 'বন্ধ';
+  badge.classList.toggle('off', !payload.ai_enabled);
 };
 
-// ---- Comment Export (Random Winner CSV) ----
 let lastExportCsv = null;
 let lastExportPostId = null;
 
