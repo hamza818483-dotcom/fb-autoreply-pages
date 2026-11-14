@@ -1,4 +1,5 @@
 "use client";
+export const runtime = "edge";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { MessageCircle } from "lucide-react";
@@ -46,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <PagesProvider>
       <Topbar />
-      <main className="max-w-[640px] mx-auto px-5 pb-20" style={{ paddingTop: "calc(64px + env(safe-area-inset-top, 0px))" }}>
+      <main className="max-w-[640px] mx-auto px-5 pb-20" style={{ paddingTop: "calc(62px + env(safe-area-inset-top, 0px))" }}>
         {children}
       </main>
     </PagesProvider>

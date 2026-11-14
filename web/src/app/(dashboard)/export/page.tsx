@@ -1,4 +1,5 @@
 "use client";
+export const runtime = "edge";
 import * as React from "react";
 import { Download, FileDown } from "lucide-react";
 import { createClient, WORKER_BASE_URL } from "@/lib/supabase";

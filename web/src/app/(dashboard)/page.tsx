@@ -1,4 +1,5 @@
 "use client";
+export const runtime = "edge";
 import { MessageSquareText, Sparkles, Download, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { usePages } from "@/components/providers/pages-provider";

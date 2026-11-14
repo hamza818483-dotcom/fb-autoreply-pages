@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+export const runtime = "edge";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 
