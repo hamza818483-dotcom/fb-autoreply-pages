@@ -581,10 +581,10 @@ function jsonResp(data, status = 200) {
   });
 }
 
-// Pull every FB post ID out of whatever the admin pasted — full post URL,
-// permalink, or a bare numeric/pageid_postid ID — so they don't have to
-// hand-extract it themselves.
-function extractPostId(input) {
+// Tries to pull a usable FB post ID directly out of a URL's path/query
+// without any network call. Returns null if the shape isn't recognized
+// (e.g. opaque /share/ links, which need resolving first).
+function extractPostIdSync(input) {
   const s = (input || "").trim();
   if (!s) return null;
   // Already a bare "pageid_postid" or numeric ID.
@@ -598,6 +598,10 @@ function extractPostId(input) {
     // .../posts/123456  or  .../videos/123456  or  .../photos/.../123456
     const m = u.pathname.match(/\/(posts|videos|photos|reel)\/(?:[^/]+\/)?(\d+)/);
     if (m) return m[2];
+    // Share links (/share/p/XXXX/ or /share/v/XXXX/ or /share/r/XXXX/) and
+    // any other FB path have no numeric ID embedded — caller must resolve
+    // the redirect first and re-parse.
+    if (/\/share\/(p|v|r)\//.test(u.pathname)) return null;
     // Fallback: last numeric-looking path segment.
     const parts = u.pathname.split("/").filter(Boolean);
     for (let i = parts.length - 1; i >= 0; i--) {
@@ -607,6 +611,53 @@ function extractPostId(input) {
     // Not a URL — give up.
   }
   return null;
+}
+
+// Pull every FB post ID out of whatever the admin pasted — full post URL,
+// permalink, numeric/pageid_postid ID, or a short "share" link
+// (facebook.com/share/p/XXXX/, /share/v/..., /share/r/...) — so they don't
+// have to hand-extract it themselves. Share links carry no ID in the URL
+// itself; FB resolves them via an HTTP redirect to the real permalink, so
+// we follow that redirect (without following it all the way, since the
+// Location header already has what we need) and parse the result.
+async function extractPostId(input) {
+  const s = (input || "").trim();
+  if (!s) return null;
+  const direct = extractPostIdSync(s);
+  if (direct) return direct;
+  let u;
+  try {
+    u = new URL(s);
+  } catch (e) {
+    return null;
+  }
+  if (!/\/share\/(p|v|r)\//.test(u.pathname)) return null;
+  try {
+    // redirect: "manual" so we read the Location header ourselves instead
+    // of the runtime silently following it (and possibly landing on a
+    // login/consent interstitial instead of the real permalink).
+    let current = s;
+    for (let hop = 0; hop < 5; hop++) {
+      const res = await fetch(current, {
+        method: "GET",
+        redirect: "manual",
+        headers: { "User-Agent": "facebookexternalhit/1.1" },
+        signal: AbortSignal.timeout(10000),
+      });
+      const loc = res.headers.get("location");
+      if (!loc) {
+        // No further redirect — try to parse whatever URL we're already at.
+        return extractPostIdSync(current);
+      }
+      const resolved = new URL(loc, current).toString();
+      const got = extractPostIdSync(resolved);
+      if (got) return got;
+      current = resolved;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Confirms the caller's Supabase access token belongs to a profile with
@@ -804,7 +855,7 @@ async function handleExportComments(request, env) {
     if (!userAccessToken) return jsonResp({ error: "লগইন প্রয়োজন" }, 401);
     if (!page_id) return jsonResp({ error: "page_id প্রয়োজন" }, 400);
 
-    const postId = extractPostId(post_url);
+    const postId = await extractPostId(post_url);
     if (!postId) return jsonResp({ error: "পোস্ট লিংক/আইডি বুঝতে পারিনি" }, 400);
 
     // Confirm this user actually owns the page — query as the USER (anon
