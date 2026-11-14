@@ -47,6 +47,17 @@ export default {
       return jsonResp({ ok: true, service: "FB Auto-Reply Pages Proxy" });
     }
 
+    // --- Comment export (Random Winner CSV feed) ---
+    // Dashboard calls this with the viewer's Supabase access token (so we
+    // can verify they actually own the page before touching its token) plus
+    // the FB post URL/ID to pull comments from. Returns commenter name +
+    // comment text + time only — no FB user IDs are persisted or returned,
+    // to keep the CSV itself free of anything beyond what's needed to
+    // announce a winner.
+    if (request.method === "POST" && url.pathname === "/api/export-comments") {
+      return handleExportComments(request, env);
+    }
+
     // Everything else: serve the static dashboard (index.html, etc.)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
@@ -554,4 +565,130 @@ function jsonResp(data, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+// Pull every FB post ID out of whatever the admin pasted — full post URL,
+// permalink, or a bare numeric/pageid_postid ID — so they don't have to
+// hand-extract it themselves.
+function extractPostId(input) {
+  const s = (input || "").trim();
+  if (!s) return null;
+  // Already a bare "pageid_postid" or numeric ID.
+  if (/^\d+(_\d+)?$/.test(s)) return s;
+  try {
+    const u = new URL(s);
+    // .../story.php?story_fbid=123&id=456 -> 456_123
+    const storyFbid = u.searchParams.get("story_fbid");
+    const idParam = u.searchParams.get("id");
+    if (storyFbid && idParam) return `${idParam}_${storyFbid}`;
+    // .../posts/123456  or  .../videos/123456  or  .../photos/.../123456
+    const m = u.pathname.match(/\/(posts|videos|photos|reel)\/(?:[^/]+\/)?(\d+)/);
+    if (m) return m[2];
+    // Fallback: last numeric-looking path segment.
+    const parts = u.pathname.split("/").filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      if (/^\d+$/.test(parts[i])) return parts[i];
+    }
+  } catch (e) {
+    // Not a URL — give up.
+  }
+  return null;
+}
+
+// Verifies the caller is actually logged in (via their Supabase access
+// token) and owns the page they're asking to export comments for, then
+// paginates every top-level comment off the Graph API and returns it as a
+// CSV download. Deliberately omits the FB user ID — the CSV only carries
+// what's needed to run and announce a "Random Winner" draw (name + comment
+// text + time), nothing that could be used to re-identify or contact
+// someone outside Facebook.
+async function handleExportComments(request, env) {
+  try {
+    const { post_url, page_id, access_token: userAccessToken } = await request.json();
+    if (!userAccessToken) return jsonResp({ error: "লগইন প্রয়োজন" }, 401);
+    if (!page_id) return jsonResp({ error: "page_id প্রয়োজন" }, 400);
+
+    const postId = extractPostId(post_url);
+    if (!postId) return jsonResp({ error: "পোস্ট লিংক/আইডি বুঝতে পারিনি" }, 400);
+
+    // Confirm this user actually owns the page — query as the USER (anon
+    // key + their JWT), so Postgres RLS on fb_pages enforces ownership for
+    // us; we never trust page_id alone from the client.
+    const ownRes = await fetch(
+      `${SB_URL}/rest/v1/fb_pages?page_id=eq.${encodeURIComponent(page_id)}&select=page_id,page_name,page_access_token`,
+      {
+        headers: {
+          apikey: SB_KEY,
+          Authorization: `Bearer ${userAccessToken}`,
+        },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    const ownRows = await ownRes.json();
+    if (!ownRes.ok || !Array.isArray(ownRows) || ownRows.length === 0) {
+      return jsonResp({ error: "এই পেজের অ্যাক্সেস নেই" }, 403);
+    }
+    const pageAccessToken = ownRows[0].page_access_token;
+
+    // Paginate top-level comments. summary=true gives Facebook's own total
+    // count, which we surface alongside the unique-commenter count (ours)
+    // since the two can differ when one person comments more than once.
+    const comments = [];
+    let nextUrl = `${GRAPH}/${encodeURIComponent(postId)}/comments?fields=from{name},message,created_time&filter=stream&order=chronological&limit=100&summary=true&access_token=${encodeURIComponent(pageAccessToken)}`;
+    let fbTotalCount = null;
+    let guard = 0;
+    while (nextUrl && guard < 100) {
+      guard++;
+      const r = await fetch(nextUrl, { signal: AbortSignal.timeout(15000) });
+      const data = await r.json();
+      if (!r.ok) {
+        return jsonResp({ error: `Facebook error: ${data?.error?.message || r.status}` }, 502);
+      }
+      if (fbTotalCount === null && data.summary && typeof data.summary.total_count === "number") {
+        fbTotalCount = data.summary.total_count;
+      }
+      for (const c of data.data || []) {
+        comments.push({
+          name: c.from?.name || "অজানা",
+          message: (c.message || "").replace(/\r?\n/g, " ").trim(),
+          time: c.created_time || "",
+        });
+      }
+      nextUrl = data.paging?.next || null;
+    }
+
+    // Unique commenters by name (no FB user ID kept) — so a giveaway can
+    // give everyone one entry regardless of how many times they commented.
+    const seen = new Set();
+    const uniqueCommenters = [];
+    for (const c of comments) {
+      const key = c.name.trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueCommenters.push(c.name.trim());
+      }
+    }
+    const topCounts = {};
+    for (const c of comments) topCounts[c.name] = (topCounts[c.name] || 0) + 1;
+    const topCommenter = Object.entries(topCounts).sort((a, b) => b[1] - a[1])[0] || null;
+
+    // CSV: name,message,time — quoted + escaped so commas/quotes in
+    // comments don't break columns.
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const csvLines = ["name,message,time"];
+    for (const c of comments) csvLines.push([esc(c.name), esc(c.message), esc(c.time)].join(","));
+    const csv = csvLines.join("\n");
+
+    return jsonResp({
+      ok: true,
+      post_id: postId,
+      total_comments: fbTotalCount ?? comments.length,
+      unique_commenters: uniqueCommenters.length,
+      top_commenter: topCommenter ? { name: topCommenter[0], count: topCommenter[1] } : null,
+      csv,
+    });
+  } catch (e) {
+    console.error("[export-comments] error:", e.message);
+    return jsonResp({ error: e.message || "অজানা সমস্যা" }, 500);
+  }
 }
