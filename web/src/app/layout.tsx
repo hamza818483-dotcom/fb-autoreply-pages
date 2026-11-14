@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/components/providers/auth-provider";
 
 export const metadata: Metadata = {
   title: "FB Auto-Reply Dashboard",
@@ -18,7 +19,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="min-h-full flex flex-col" style={{ fontFamily: "'Inter','Hind Siliguri',-apple-system,'Segoe UI',system-ui,sans-serif" }}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
