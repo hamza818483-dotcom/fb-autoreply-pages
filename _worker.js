@@ -58,6 +58,20 @@ export default {
       return handleExportComments(request, env);
     }
 
+    // --- Super-admin endpoints (customer management) ---
+    if (url.pathname === "/api/admin/customers" && request.method === "GET") {
+      return handleAdminListCustomers(request, env);
+    }
+    if (url.pathname === "/api/admin/customers" && request.method === "POST") {
+      return handleAdminCreateCustomer(request, env);
+    }
+    if (url.pathname === "/api/admin/customers" && request.method === "PATCH") {
+      return handleAdminUpdateCustomer(request, env);
+    }
+    if (url.pathname === "/api/admin/customers" && request.method === "DELETE") {
+      return handleAdminDeleteCustomer(request, env);
+    }
+
     // Everything else: serve the static dashboard (index.html, etc.)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
@@ -593,6 +607,188 @@ function extractPostId(input) {
     // Not a URL — give up.
   }
   return null;
+}
+
+// Confirms the caller's Supabase access token belongs to a profile with
+// role='super_admin'. Returns the user id on success, null otherwise.
+async function requireSuperAdmin(request, env) {
+  const auth = request.headers.get("Authorization") || "";
+  const token = auth.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const userRes = await fetch(`${SB_URL}/auth/v1/user`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!userRes.ok) return null;
+  const user = await userRes.json();
+  if (!user?.id) return null;
+  const profRes = await fetch(
+    `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=role`,
+    { headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` }, signal: AbortSignal.timeout(10000) }
+  );
+  const profRows = await profRes.json();
+  if (!profRes.ok || !Array.isArray(profRows) || profRows.length === 0) return null;
+  if (profRows[0].role !== "super_admin") return null;
+  return user.id;
+}
+
+// List all customers (profiles with role='customer') + their pages +
+// subscription + branding, for the admin panel table.
+async function handleAdminListCustomers(request, env) {
+  try {
+    const adminId = await requireSuperAdmin(request, env);
+    if (!adminId) return jsonResp({ error: "Unauthorized" }, 403);
+
+    const profRes = await fetch(
+      `${SB_URL}/rest/v1/profiles?role=eq.customer&select=id,email,business_name,logo_url,created_at&order=created_at.desc`,
+      { headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` }, signal: AbortSignal.timeout(10000) }
+    );
+    const profiles = await profRes.json();
+    if (!profRes.ok) return jsonResp({ error: profiles?.message || "Failed to load customers" }, 500);
+
+    const subRes = await fetch(
+      `${SB_URL}/rest/v1/subscriptions?select=*`,
+      { headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` }, signal: AbortSignal.timeout(10000) }
+    );
+    const subs = await subRes.json();
+
+    const pageRes = await fetch(
+      `${SB_URL}/rest/v1/fb_pages?select=page_id,page_name,owner_id`,
+      { headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` }, signal: AbortSignal.timeout(10000) }
+    );
+    const pages = await pageRes.json();
+
+    const customers = (profiles || []).map((p) => ({
+      ...p,
+      pages: (pages || []).filter((pg) => pg.owner_id === p.id),
+      subscriptions: (subs || []).filter((s) => s.owner_id === p.id),
+    }));
+
+    return jsonResp({ ok: true, customers });
+  } catch (e) {
+    return jsonResp({ error: e.message || "Unknown error" }, 500);
+  }
+}
+
+// Creates a brand-new Supabase auth user (via service_role Admin API,
+// email pre-confirmed — no verification email needed since the admin is
+// provisioning manually after receiving payment) + their profile row.
+async function handleAdminCreateCustomer(request, env) {
+  try {
+    const adminId = await requireSuperAdmin(request, env);
+    if (!adminId) return jsonResp({ error: "Unauthorized" }, 403);
+
+    const { email, password, business_name } = await request.json();
+    if (!email || !password) return jsonResp({ error: "email ও password প্রয়োজন" }, 400);
+
+    const createRes = await fetch(`${SB_URL}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: {
+        apikey: dbKey(env),
+        Authorization: `Bearer ${dbKey(env)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password, email_confirm: true }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const created = await createRes.json();
+    if (!createRes.ok) return jsonResp({ error: created?.msg || created?.error_description || "User তৈরি ব্যর্থ হয়েছে" }, 400);
+
+    const profRes = await fetch(`${SB_URL}/rest/v1/profiles`, {
+      method: "POST",
+      headers: {
+        apikey: dbKey(env),
+        Authorization: `Bearer ${dbKey(env)}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        id: created.id,
+        email,
+        role: "customer",
+        business_name: business_name || null,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const prof = await profRes.json();
+    if (!profRes.ok) return jsonResp({ error: prof?.message || "Profile তৈরি ব্যর্থ হয়েছে" }, 500);
+
+    return jsonResp({ ok: true, customer: Array.isArray(prof) ? prof[0] : prof });
+  } catch (e) {
+    return jsonResp({ error: e.message || "Unknown error" }, 500);
+  }
+}
+
+// Updates a customer's branding (business_name/logo_url) and/or their
+// subscription status for a given page (active/expired + expires_at),
+// upserting the subscriptions row keyed on (owner_id, page_id).
+async function handleAdminUpdateCustomer(request, env) {
+  try {
+    const adminId = await requireSuperAdmin(request, env);
+    if (!adminId) return jsonResp({ error: "Unauthorized" }, 403);
+
+    const body = await request.json();
+    const { customer_id, business_name, logo_url, page_id, status, expires_at } = body;
+    if (!customer_id) return jsonResp({ error: "customer_id প্রয়োজন" }, 400);
+
+    if (business_name !== undefined || logo_url !== undefined) {
+      const patch = {};
+      if (business_name !== undefined) patch.business_name = business_name;
+      if (logo_url !== undefined) patch.logo_url = logo_url;
+      const r = await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${customer_id}`, {
+        method: "PATCH",
+        headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(patch),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!r.ok) { const e2 = await r.json(); return jsonResp({ error: e2?.message || "Branding আপডেট ব্যর্থ" }, 500); }
+    }
+
+    if (page_id && status) {
+      const r = await fetch(`${SB_URL}/rest/v1/subscriptions`, {
+        method: "POST",
+        headers: {
+          apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}`, "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          owner_id: customer_id, page_id, status,
+          expires_at: expires_at || null,
+          updated_at: new Date().toISOString(),
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!r.ok) { const e2 = await r.json(); return jsonResp({ error: e2?.message || "Subscription আপডেট ব্যর্থ" }, 500); }
+    }
+
+    return jsonResp({ ok: true });
+  } catch (e) {
+    return jsonResp({ error: e.message || "Unknown error" }, 500);
+  }
+}
+
+// Deletes a customer entirely: auth user (cascades to profile via FK) +
+// their pages/keywords/etc are left for the admin's RLS-bypassing cleanup
+// (cascade handled at DB level via ON DELETE CASCADE on fb_pages.owner_id).
+async function handleAdminDeleteCustomer(request, env) {
+  try {
+    const adminId = await requireSuperAdmin(request, env);
+    if (!adminId) return jsonResp({ error: "Unauthorized" }, 403);
+
+    const { customer_id } = await request.json();
+    if (!customer_id) return jsonResp({ error: "customer_id প্রয়োজন" }, 400);
+
+    const r = await fetch(`${SB_URL}/auth/v1/admin/users/${customer_id}`, {
+      method: "DELETE",
+      headers: { apikey: dbKey(env), Authorization: `Bearer ${dbKey(env)}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) { const e2 = await r.json().catch(() => ({})); return jsonResp({ error: e2?.msg || "Delete ব্যর্থ" }, 500); }
+
+    return jsonResp({ ok: true });
+  } catch (e) {
+    return jsonResp({ error: e.message || "Unknown error" }, 500);
+  }
 }
 
 // Verifies the caller is actually logged in (via their Supabase access
