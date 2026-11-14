@@ -2,7 +2,7 @@
 <html lang="bn">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>FB Auto-Reply Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -20,14 +20,16 @@
     --shadow-md:0 4px 16px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
     --shadow-lg:0 12px 32px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.05);
   }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
+  *{box-sizing:border-box;min-width:0}
+  html,body{margin:0;padding:0;overflow-x:hidden;width:100%}
   @media (prefers-reduced-motion: reduce){ *{animation-duration:.01ms !important; transition-duration:.01ms !important;} }
   body{
     background:var(--bg); color:var(--text);
     font-family:'Inter','Hind Siliguri',-apple-system,'Segoe UI',system-ui,sans-serif;
     min-height:100vh; -webkit-font-smoothing:antialiased;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
   }
+  img,svg{max-width:100%}
   ::selection{background:var(--accent-soft);color:var(--indigo)}
   .wrap{max-width:420px;margin:0 auto;padding:32px 20px 80px}
   h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}
@@ -42,8 +44,8 @@
   label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;font-weight:600;letter-spacing:.01em}
   input,textarea,select{
     width:100%;padding:11px 13px;background:#fff;border:1.5px solid var(--border);
-    border-radius:var(--radius-sm);color:var(--text);font-size:15px;margin-bottom:14px;font-family:inherit;
-    transition:border-color .15s ease,box-shadow .15s ease
+    border-radius:var(--radius-sm);color:var(--text);font-size:16px;margin-bottom:14px;font-family:inherit;
+    transition:border-color .15s ease,box-shadow .15s ease;max-width:100%
   }
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   input::placeholder,textarea::placeholder{color:#A0AEC0}
@@ -61,6 +63,7 @@
   button.danger{background:#fff;border:1.5px solid var(--border);color:var(--error);box-shadow:none}
   button.danger:hover{background:var(--error-soft);border-color:var(--error)}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .row.justify-between{justify-content:space-between}
   .kw-item{
     border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:16px;margin-bottom:8px;
     background:#fff; transition:box-shadow .15s ease, transform .15s ease;
@@ -92,6 +95,7 @@
     position:sticky;top:0;z-index:40;background:rgba(248,250,252,.85);backdrop-filter:blur(10px);
     border-bottom:1px solid var(--border-soft);
     display:flex;align-items:center;gap:12px;padding:14px 20px;
+    padding-top:calc(14px + env(safe-area-inset-top,0px));
     transition:box-shadow .2s ease;
   }
   .topbar.scrolled{box-shadow:var(--shadow-sm)}
@@ -160,6 +164,7 @@
   .feature-header p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
 
   .toggle-row{display:flex;align-items:center;gap:10px}
+  .row.justify-between label{flex:1;min-width:120px}
   .toggle{
     position:relative;width:42px;height:24px;border-radius:999px;background:#CBD5E1;flex-shrink:0;
     cursor:pointer;transition:background .2s ease;border:none;padding:0;box-shadow:none;
@@ -172,7 +177,9 @@
   .toggle.on::after{transform:translateX(18px)}
   input[type=checkbox].toggle-input{display:none}
 
-  .stat-box{background:var(--accent-soft);border-radius:var(--radius-sm);padding:14px 16px}
+  .export-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stat-box{background:var(--accent-soft);border-radius:var(--radius-sm);padding:14px 16px;min-width:0;overflow:hidden}
+  .stat-box .n{overflow-wrap:break-word}
   .stat-box .n{font-size:20px;font-weight:800;color:var(--indigo)}
   .stat-box .l{font-size:11.5px;color:var(--muted);margin-top:2px}
 
@@ -180,10 +187,30 @@
 
   @media (min-width: 561px){ .whoami{display:inline} }
   @media (max-width: 560px){
-    .main{padding:20px 16px 70px}
-    .topbar{padding:12px 16px}
-    .card{padding:18px;border-radius:12px}
-    .feature-card{padding:20px 16px}
+    .wrap{padding:24px 14px 60px}
+    .main{padding:18px 14px 70px}
+    .topbar{padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top,0px));gap:8px}
+    .topbar .brand-label{font-size:14px}
+    .topbar button{padding:7px 11px;font-size:12.5px}
+    .card{padding:16px;border-radius:12px;margin-bottom:12px}
+    .feature-card{padding:18px 16px;gap:10px}
+    .feature-card .ic{width:42px;height:42px;border-radius:12px}
+    .feature-card .ic svg{width:21px;height:21px}
+    .feature-card .ftitle{font-size:15px}
+    .feature-card .fdesc{font-size:12.5px}
+    .feature-card .badge{top:14px;right:14px;font-size:10.5px;padding:3px 8px}
+    .feature-header{gap:10px;margin-bottom:18px}
+    .feature-header h1{font-size:17px}
+    h2{font-size:14px}
+    .row{gap:8px}
+    .row > *{min-width:0}
+    button{padding:10px 14px;font-size:13.5px}
+    .stat-box{padding:12px}
+    .stat-box .n{font-size:17px}
+  }
+  @media (max-width: 360px){
+    .feature-card .ftitle{font-size:14px}
+    h1{font-size:19px}
   }
 </style>
 </head>
@@ -317,7 +344,7 @@
           </div>
         </div>
         <div class="card">
-          <div class="row" style="margin-bottom:18px;justify-content:space-between">
+          <div class="row justify-between" style="margin-bottom:18px">
             <label style="margin-bottom:0">AI reply চালু করুন</label>
             <button type="button" class="toggle" id="aiEnabledToggle"></button>
             <input type="checkbox" id="aiEnabled" class="toggle-input" />
@@ -325,7 +352,7 @@
           <label>System Prompt (bot কেমন reply দেবে তা লিখুন)</label>
           <textarea id="aiPrompt" placeholder="তুমি একটা Facebook page assistant। বাংলায় সংক্ষেপে, ভদ্রভাবে reply দেবে..." style="min-height:90px"></textarea>
 
-          <div class="row" style="margin-bottom:7px;justify-content:space-between">
+          <div class="row justify-between" style="margin-bottom:7px">
             <label style="margin-bottom:0">Gemini API Keys (কমা দিয়ে একাধিক)</label>
             <div class="row" style="gap:6px">
               <button type="button" class="toggle" id="geminiEnabledToggle"></button>
@@ -334,7 +361,7 @@
           </div>
           <input type="text" id="geminiKeys" placeholder="AIzaSy..., AIzaSy..." />
 
-          <div class="row" style="margin-bottom:7px;justify-content:space-between">
+          <div class="row justify-between" style="margin-bottom:7px">
             <label style="margin-bottom:0">Groq API Keys (কমা দিয়ে একাধিক)</label>
             <div class="row" style="gap:6px">
               <button type="button" class="toggle" id="groqEnabledToggle"></button>
@@ -346,7 +373,7 @@
           <button id="saveAiBtn">সেভ করুন</button>
           <div class="helper" id="aiMsg"></div>
 
-          <div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft);justify-content:space-between">
+          <div class="row justify-between" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border-soft)">
             <label style="margin-bottom:0"><i data-lucide="bell" class="icon-inline"></i>Debug alert (Telegram-এ error/status message)</label>
             <button type="button" class="toggle" id="debugEnabledToggle"></button>
             <input type="checkbox" id="debugEnabled" class="toggle-input" />
@@ -371,10 +398,10 @@
           <button id="exportBtn"><i data-lucide="download" class="icon-inline"></i>কমেন্ট আনুন</button>
           <div class="helper" id="exportMsg"></div>
           <div id="exportStats" class="hidden" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-soft)">
-            <div class="row" style="gap:12px;margin-bottom:14px">
-              <div class="stat-box" style="flex:1"><div class="n" id="statTotal">—</div><div class="l">মোট কমেন্ট</div></div>
-              <div class="stat-box" style="flex:1"><div class="n" id="statUnique">—</div><div class="l">ইউনিক কমেন্টকারী</div></div>
-              <div class="stat-box" style="flex:1.4"><div class="n" style="font-size:14px" id="statTop">—</div><div class="l">সর্বোচ্চ কমেন্ট</div></div>
+            <div class="export-stats-grid" style="margin-bottom:14px">
+              <div class="stat-box"><div class="n" id="statTotal">—</div><div class="l">মোট কমেন্ট</div></div>
+              <div class="stat-box"><div class="n" id="statUnique">—</div><div class="l">ইউনিক কমেন্টকারী</div></div>
+              <div class="stat-box" style="grid-column:1/-1"><div class="n" style="font-size:14px" id="statTop">—</div><div class="l">সর্বোচ্চ কমেন্ট</div></div>
             </div>
             <button class="secondary" id="downloadCsvBtn"><i data-lucide="file-down" class="icon-inline"></i>CSV ডাউনলোড করুন</button>
           </div>
