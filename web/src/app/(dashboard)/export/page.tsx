@@ -2,7 +2,7 @@
 export const runtime = "edge";
 import * as React from "react";
 import { Download, FileDown } from "lucide-react";
-import { createClient, WORKER_BASE_URL } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 import { usePages } from "@/components/providers/pages-provider";
 import { FeatureHeader } from "@/components/feature-header";
 import { Card } from "@/components/ui/card";
@@ -25,7 +25,7 @@ export default function ExportPage() {
     setMsg({ text: "কমেন্ট আনা হচ্ছে...", ok: true });
     try {
       const { data: { session } } = await sb.auth.getSession();
-      const res = await fetch(`${WORKER_BASE_URL}/api/export-comments`, {
+      const res = await fetch(`/api/export-comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ post_url: postUrl.trim(), page_id: currentPageId, access_token: session?.access_token }),
