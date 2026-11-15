@@ -97,10 +97,11 @@ export async function POST(request: Request) {
       return jsonResp({ error: "এই পেজের অ্যাক্সেস নেই" }, 403);
     }
     const pageAccessToken = ownRows[0].page_access_token;
+    const pageFbId = page_id; // this page's own FB page id — used to drop its auto-replies below
 
-    const comments: { name: string; message: string; time: string }[] = [];
+    const comments: { id: string; fromId: string | null; name: string | null; message: string; time: string }[] = [];
     let nextUrl: string | null =
-      `${GRAPH}/${encodeURIComponent(postId)}/comments?fields=from{name},message,created_time&filter=stream&order=chronological&limit=100&summary=true&access_token=${encodeURIComponent(pageAccessToken)}`;
+      `${GRAPH}/${encodeURIComponent(postId)}/comments?fields=id,from{id,name},message,created_time&filter=stream&order=chronological&limit=100&summary=true&access_token=${encodeURIComponent(pageAccessToken)}`;
     let fbTotalCount: number | null = null;
     let guard = 0;
     while (nextUrl && guard < 100) {
@@ -115,7 +116,9 @@ export async function POST(request: Request) {
       }
       for (const c of data.data || []) {
         comments.push({
-          name: c.from?.name || "অজানা",
+          id: c.id || "",
+          fromId: c.from?.id || null,
+          name: c.from?.name || null,
           message: (c.message || "").replace(/\r?\n/g, " ").trim(),
           time: c.created_time || "",
         });
@@ -123,30 +126,53 @@ export async function POST(request: Request) {
       nextUrl = data.paging?.next || null;
     }
 
-    const seen = new Set<string>();
-    const uniqueCommenters: string[] = [];
-    for (const c of comments) {
-      const key = c.name.trim().toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueCommenters.push(c.name.trim());
-      }
+    // Drop the page's own comments (its auto-replies to commenters, posted
+    // back as top-level "stream" comments by Graph API) — these aren't real
+    // audience commenters and shouldn't count toward anyone's entry/total.
+    // Also drop anything with no identifiable commenter (from missing
+    // entirely — e.g. a deleted/restricted account) rather than labeling it
+    // "অজানা" and mixing it into a real person's row.
+    const realComments = comments.filter((c) => {
+      if (!c.name) return false;
+      if (pageFbId && c.fromId === String(pageFbId)) return false;
+      return true;
+    });
+
+    // Group by commenter name -> total count + every comment they made,
+    // in original (chronological) order.
+    const byName = new Map<string, { name: string; messages: string[] }>();
+    for (const c of realComments) {
+      const key = c.name!.trim().toLowerCase();
+      if (!byName.has(key)) byName.set(key, { name: c.name!.trim(), messages: [] });
+      byName.get(key)!.messages.push(c.message);
     }
-    const topCounts: Record<string, number> = {};
-    for (const c of comments) topCounts[c.name] = (topCounts[c.name] || 0) + 1;
-    const topCommenter = Object.entries(topCounts).sort((a, b) => b[1] - a[1])[0] || null;
+    const grouped = Array.from(byName.values());
+    // Most-active commenter first, so the giveaway's winner candidates are
+    // easy to scan at the top of the CSV too.
+    grouped.sort((a, b) => b.messages.length - a.messages.length);
+
+    const topCommenter = grouped[0] ? { name: grouped[0].name, count: grouped[0].messages.length } : null;
 
     const esc = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
-    const csvLines = ["name,message,time"];
-    for (const c of comments) csvLines.push([esc(c.name), esc(c.message), esc(c.time)].join(","));
+    const csvLines = ["name,comment,total_comments,all_comments"];
+    for (const g of grouped) {
+      csvLines.push(
+        [
+          esc(g.name),
+          esc(g.messages[0] || ""),
+          esc(g.messages.length),
+          esc(g.messages.join(" | ")),
+        ].join(",")
+      );
+    }
     const csv = csvLines.join("\n");
 
     return jsonResp({
       ok: true,
       post_id: postId,
-      total_comments: fbTotalCount ?? comments.length,
-      unique_commenters: uniqueCommenters.length,
-      top_commenter: topCommenter ? { name: topCommenter[0], count: topCommenter[1] } : null,
+      total_comments: realComments.length,
+      unique_commenters: grouped.length,
+      top_commenter: topCommenter,
       csv,
     });
   } catch (e: any) {
