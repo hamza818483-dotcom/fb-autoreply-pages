@@ -184,27 +184,12 @@ export async function POST(request: Request) {
       `${GRAPH}/${encodeURIComponent(postId)}/comments?fields=id,from{id,name},message,created_time&filter=stream&order=chronological&limit=100&summary=true&access_token=${encodeURIComponent(pageAccessToken)}`;
     let fbTotalCount: number | null = null;
     let guard = 0;
-    // TEMP DEBUG: capture the first page's raw shape so we can see exactly
-    // what Graph returned when the UI shows 0/0 — remove once root-caused.
-    let debugFirstPage: any = null;
     while (nextUrl && guard < 100) {
       guard++;
       const r = await fetch(nextUrl, { signal: AbortSignal.timeout(15000) });
       const data: any = await r.json();
-      if (guard === 1) {
-        debugFirstPage = {
-          http_status: r.status,
-          post_id_used: postId,
-          has_error: !!data?.error,
-          error: data?.error || null,
-          summary: data?.summary || null,
-          data_count: Array.isArray(data?.data) ? data.data.length : null,
-          first_item: Array.isArray(data?.data) ? data.data[0] || null : null,
-          paging: data?.paging || null,
-        };
-      }
       if (!r.ok) {
-        return jsonResp({ error: `Facebook error: ${data?.error?.message || r.status}`, debug: debugFirstPage }, 502);
+        return jsonResp({ error: `Facebook error: ${data?.error?.message || r.status}` }, 502);
       }
       if (fbTotalCount === null && data.summary && typeof data.summary.total_count === "number") {
         fbTotalCount = data.summary.total_count;
@@ -224,13 +209,22 @@ export async function POST(request: Request) {
     // Drop the page's own comments (its auto-replies to commenters, posted
     // back as top-level "stream" comments by Graph API) — these aren't real
     // audience commenters and shouldn't count toward anyone's entry/total.
-    // Also drop anything with no identifiable commenter (from missing
-    // entirely — e.g. a deleted/restricted account) rather than labeling it
-    // "অজানা" and mixing it into a real person's row.
-    const realComments = comments.filter((c) => {
-      if (!c.name) return false;
+    const withoutPageReplies = comments.filter((c) => {
       if (pageFbId && c.fromId === String(pageFbId)) return false;
       return true;
+    });
+
+    // Graph sometimes omits "from" entirely for a real commenter (private/
+    // restricted profile, or token missing read_page_mailboxes) even though
+    // the comment itself is genuine — happened on every comment of a 4-
+    // comment post here. Dropping these would silently zero out real
+    // entries, so keep them but give each its own unique fallback name
+    // (never one shared "অজানা" bucket, which would wrongly merge
+    // different unidentified people into a single winner-eligible row).
+    const realComments = withoutPageReplies.map((c) => {
+      if (c.name) return c;
+      const shortId = c.id ? c.id.split("_").pop() || c.id : "?";
+      return { ...c, name: `অজানা ব্যবহারকারী #${shortId}` };
     });
 
     // Group by commenter name -> total count + every comment they made,
@@ -264,7 +258,6 @@ export async function POST(request: Request) {
       unique_commenters: grouped.length,
       top_commenter: topCommenter,
       csv,
-      debug: debugFirstPage, // TEMP — remove once root-caused
     });
   } catch (e: any) {
     console.error("[export-comments] error:", e.message);
