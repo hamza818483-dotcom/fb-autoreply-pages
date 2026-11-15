@@ -26,6 +26,12 @@ function extractPostIdSync(input: string | null | undefined): string | null {
     const storyFbid = u.searchParams.get("story_fbid");
     const idParam = u.searchParams.get("id");
     if (storyFbid && idParam) return `${idParam}_${storyFbid}`;
+    // .../<pageId>/posts/<postId>/... — the bare <postId> alone is a legacy
+    // "status" id; Graph API v2.4+ deprecated looking that up on its own
+    // (error #12 "singular statuses API is deprecated"), so it must be
+    // combined with the page id into the composite <pageId>_<postId> form.
+    const postsMatch = u.pathname.match(/^\/(\d+)\/posts\/(?:[^/]+\/)?(\d+)/);
+    if (postsMatch) return `${postsMatch[1]}_${postsMatch[2]}`;
     const m = u.pathname.match(/\/(posts|videos|photos|reel)\/(?:[^/]+\/)?(\d+)/);
     if (m) return m[2];
     if (/\/share\/(p|v|r)\//.test(u.pathname)) return null;
