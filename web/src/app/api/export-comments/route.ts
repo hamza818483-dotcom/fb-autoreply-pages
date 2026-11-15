@@ -184,12 +184,27 @@ export async function POST(request: Request) {
       `${GRAPH}/${encodeURIComponent(postId)}/comments?fields=id,from{id,name},message,created_time&filter=stream&order=chronological&limit=100&summary=true&access_token=${encodeURIComponent(pageAccessToken)}`;
     let fbTotalCount: number | null = null;
     let guard = 0;
+    // TEMP DEBUG: capture the first page's raw shape so we can see exactly
+    // what Graph returned when the UI shows 0/0 — remove once root-caused.
+    let debugFirstPage: any = null;
     while (nextUrl && guard < 100) {
       guard++;
       const r = await fetch(nextUrl, { signal: AbortSignal.timeout(15000) });
       const data: any = await r.json();
+      if (guard === 1) {
+        debugFirstPage = {
+          http_status: r.status,
+          post_id_used: postId,
+          has_error: !!data?.error,
+          error: data?.error || null,
+          summary: data?.summary || null,
+          data_count: Array.isArray(data?.data) ? data.data.length : null,
+          first_item: Array.isArray(data?.data) ? data.data[0] || null : null,
+          paging: data?.paging || null,
+        };
+      }
       if (!r.ok) {
-        return jsonResp({ error: `Facebook error: ${data?.error?.message || r.status}` }, 502);
+        return jsonResp({ error: `Facebook error: ${data?.error?.message || r.status}`, debug: debugFirstPage }, 502);
       }
       if (fbTotalCount === null && data.summary && typeof data.summary.total_count === "number") {
         fbTotalCount = data.summary.total_count;
@@ -249,6 +264,7 @@ export async function POST(request: Request) {
       unique_commenters: grouped.length,
       top_commenter: topCommenter,
       csv,
+      debug: debugFirstPage, // TEMP — remove once root-caused
     });
   } catch (e: any) {
     console.error("[export-comments] error:", e.message);

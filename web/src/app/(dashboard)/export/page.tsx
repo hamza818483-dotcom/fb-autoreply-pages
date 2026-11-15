@@ -16,6 +16,7 @@ export default function ExportPage() {
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<{ text: string; ok: boolean } | null>(null);
   const [stats, setStats] = React.useState<{ total: number; unique: number; top: string } | null>(null);
+  const [debug, setDebug] = React.useState<unknown>(null); // TEMP — remove once root-caused
   const csvRef = React.useRef<{ csv: string; postId: string } | null>(null);
 
   async function run() {
@@ -31,6 +32,7 @@ export default function ExportPage() {
         body: JSON.stringify({ post_url: postUrl.trim(), page_id: currentPageId, access_token: session?.access_token }),
       });
       const data = await res.json();
+      setDebug(data.debug ?? null); // TEMP — remove once root-caused
       if (!res.ok || data.error) { setMsg({ text: data.error || "ব্যর্থ হয়েছে", ok: false }); return; }
       csvRef.current = { csv: data.csv, postId: data.post_id };
       setStats({
@@ -77,6 +79,12 @@ export default function ExportPage() {
             </div>
             <Button variant="secondary" onClick={download}><FileDown size={16} /> CSV ডাউনলোড করুন</Button>
           </div>
+        )}
+        {/* TEMP DEBUG — remove once root-caused */}
+        {!!debug && (
+          <pre className="mt-3 p-2 bg-muted rounded-lg text-[10px] overflow-auto max-h-64 whitespace-pre-wrap break-all">
+            {JSON.stringify(debug, null, 2)}
+          </pre>
         )}
       </Card>
     </div>
