@@ -17,31 +17,105 @@ function jsonResp(obj: unknown, status = 200) {
   });
 }
 
+// Covers every FB post-link shape seen in practice. The one rule that
+// matters for correctness (not just parsing): whenever a page/profile id is
+// known from the URL, the result MUST be the composite "<pageId>_<postId>"
+// id, never the bare postId alone — a bare numeric id is a legacy "status"
+// object, and Graph API v2.4+ deprecated looking those up directly (error
+// #12 "singular statuses API is deprecated for versions v2.4 and higher").
+// Only genuinely page-less shapes (plain numeric id/pair pasted in, or a
+// pathless query-string id) fall back to a bare id.
 function extractPostIdSync(input: string | null | undefined): string | null {
   const s = (input || "").trim();
   if (!s) return null;
+
+  // Already an id or composite id, pasted directly (no URL at all).
   if (/^\d+(_\d+)?$/.test(s)) return s;
+
+  let u: URL;
   try {
-    const u = new URL(s);
-    const storyFbid = u.searchParams.get("story_fbid");
-    const idParam = u.searchParams.get("id");
-    if (storyFbid && idParam) return `${idParam}_${storyFbid}`;
-    // .../<pageId>/posts/<postId>/... — the bare <postId> alone is a legacy
-    // "status" id; Graph API v2.4+ deprecated looking that up on its own
-    // (error #12 "singular statuses API is deprecated"), so it must be
-    // combined with the page id into the composite <pageId>_<postId> form.
-    const postsMatch = u.pathname.match(/^\/(\d+)\/posts\/(?:[^/]+\/)?(\d+)/);
-    if (postsMatch) return `${postsMatch[1]}_${postsMatch[2]}`;
-    const m = u.pathname.match(/\/(posts|videos|photos|reel)\/(?:[^/]+\/)?(\d+)/);
-    if (m) return m[2];
-    if (/\/share\/(p|v|r)\//.test(u.pathname)) return null;
-    const parts = u.pathname.split("/").filter(Boolean);
-    for (let i = parts.length - 1; i >= 0; i--) {
-      if (/^\d+$/.test(parts[i])) return parts[i];
-    }
+    u = new URL(s);
   } catch {
-    // Not a URL — give up.
+    return null;
   }
+
+  const path = u.pathname;
+  const parts = path.split("/").filter(Boolean);
+
+  // ?story_fbid=<postId>&id=<pageId>  (old permalink.php / mobile links)
+  const storyFbid = u.searchParams.get("story_fbid");
+  const idParam = u.searchParams.get("id");
+  if (storyFbid && idParam) return `${idParam}_${storyFbid}`;
+
+  // fbid=<id> alone (sharer.php, some photo/video links) with no page
+  // context in the query — composite not knowable from the URL alone.
+  const fbidParam = u.searchParams.get("fbid");
+
+  // .../<pageId>/posts/<postId>/...   (also covers /pfbid.../ slug variants,
+  // and groups: /groups/<groupId>/posts/<postId>/... — group id plays the
+  // same role as page id here)
+  let m = path.match(/^\/groups\/([^/]+)\/(?:permalink|posts)\/(\d+)/);
+  if (m) return `${m[1]}_${m[2]}`;
+
+  m = path.match(/^\/(\d+)\/posts\/(?:[^/]+\/)?(\d+)/);
+  if (m) return `${m[1]}_${m[2]}`;
+
+  // .../<pageUsername-or-id>/videos/<postId>/...
+  // .../<pageUsername-or-id>/photos/.../<postId>/...
+  // .../<pageUsername-or-id>/reel/<postId>/...
+  // .../<pageUsername-or-id>/activity/<postId>/...
+  // Username-form page ids (e.g. "atlas.edu.page") aren't usable as a Graph
+  // object id component on their own, but the numeric id form is — and
+  // that's the common case for pasted dashboard/page-admin links.
+  m = path.match(/^\/([^/]+)\/(?:posts|videos|photos(?:\.php)?|reel|activity|notes)\/(?:[^/]+\/)?(\d+)/);
+  if (m) {
+    const owner = m[1];
+    return /^\d+$/.test(owner) ? `${owner}_${m[2]}` : m[2];
+  }
+
+  // photo.php?fbid=<id>&id=<pageId>  / video.php?v=<id>&...
+  if (fbidParam && idParam) return `${idParam}_${fbidParam}`;
+  if (fbidParam) {
+    const vParam = u.searchParams.get("v");
+    void vParam;
+    return fbidParam;
+  }
+  const vParam = u.searchParams.get("v");
+  if (vParam && /^\d+$/.test(vParam)) {
+    return idParam ? `${idParam}_${vParam}` : vParam;
+  }
+
+  // watch/?v=<videoId>  (fb.watch and facebook.com/watch)
+  if (/^\/watch\/?$/.test(path)) {
+    const v = u.searchParams.get("v");
+    if (v) return v;
+  }
+
+  // Share links resolve via redirect-follow in extractPostId(), not here.
+  if (/^\/share\/(p|v|r)\//.test(path)) return null;
+
+  // story.php?story_fbid=...&id=...  already handled above via params.
+  // permalink.php?story_fbid=...&id=...  same.
+
+  // Generic .../<pageId>/<numericId> with no known keyword in between
+  // (some older/odd permalink shapes) — still prefer composite form when
+  // the leading segment is numeric.
+  if (parts.length >= 2 && /^\d+$/.test(parts[0])) {
+    const last = parts[parts.length - 1];
+    if (/^\d+$/.test(last) && last !== parts[0]) return `${parts[0]}_${last}`;
+  }
+
+  // Last resort: any bare numeric path segment (no usable page context
+  // found). This can hit the deprecated singular-status endpoint if that
+  // segment really is a status id with no page prefix available — but it's
+  // better than refusing the link outright, and most remaining shapes here
+  // are pfbid-style single-token slugs FB already resolves without a page
+  // prefix.
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (/^\d+$/.test(parts[i])) return parts[i];
+    if (/^pfbid[0-9A-Za-z]+$/.test(parts[i])) return parts[i];
+  }
+
   return null;
 }
 
