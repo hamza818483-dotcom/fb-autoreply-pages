@@ -154,15 +154,10 @@ export async function POST(request: Request) {
     const topCommenter = grouped[0] ? { name: grouped[0].name, count: grouped[0].messages.length } : null;
 
     const esc = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
-    const csvLines = ["name,comment,total_comments,all_comments"];
+    const csvLines = ["name,total_comments,all_comments"];
     for (const g of grouped) {
       csvLines.push(
-        [
-          esc(g.name),
-          esc(g.messages[0] || ""),
-          esc(g.messages.length),
-          esc(g.messages.join(" | ")),
-        ].join(",")
+        [esc(g.name), esc(g.messages.length), esc(g.messages.join(" | "))].join(",")
       );
     }
     const csv = csvLines.join("\n");
