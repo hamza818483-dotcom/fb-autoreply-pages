@@ -191,202 +191,22 @@ export default function VideoSaverPage() {
  * ------------------------------------------------------------------- */
 
 function SaverTab() {
-  const [url, setUrl] = React.useState("");
-  const [status, setStatus] = React.useState<"idle" | "checking" | "ready" | "unsupported" | "error">("idle");
-  const [errorMsg, setErrorMsg] = React.useState("");
-  const [history, setHistory] = React.useState<HistoryItem[]>([]);
-
-  React.useEffect(() => {
-    setHistory(loadHistory(SAVER_HISTORY_KEY));
-  }, []);
-
-  const platform = detectPlatform(url);
-  const meta = PLATFORM_META[platform];
-
-  async function handlePaste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      setUrl(text);
-      setStatus("idle");
-    } catch {
-      setErrorMsg("ক্লিপবোর্ড থেকে পড়া যায়নি — ম্যানুয়ালি পেস্ট করুন।");
-    }
-  }
-
-  function handleClear() {
-    setUrl("");
-    setStatus("idle");
-    setErrorMsg("");
-  }
-
-  async function handleProcess() {
-    setErrorMsg("");
-    if (!isValidUrl(url)) {
-      setStatus("error");
-      setErrorMsg("লিংকটি সঠিক নয়। সম্পূর্ণ URL (http/https সহ) পেস্ট করুন।");
-      return;
-    }
-    setStatus("checking");
-    const p = detectPlatform(url);
-    if (p === "direct" || (VIDEO_DOWNLOADER_API && ["facebook", "youtube", "instagram", "tiktok"].includes(p))) {
-      try {
-        if (p !== "direct") {
-          const health = await fetch(`${VIDEO_DOWNLOADER_API}/health`, { cache: "no-store" });
-          if (!health.ok) throw new Error("Downloader backend unavailable");
-        }
-        setStatus("ready");
-        const h = pushHistory(SAVER_HISTORY_KEY, {
-          id: crypto.randomUUID(),
-          name: url,
-          platform: p,
-          status: "ready",
-          at: Date.now(),
-        });
-        setHistory(h);
-      } catch {
-        setStatus("error");
-        setErrorMsg("Downloader backend-এ সংযোগ করা যায়নি। Backend URL ও deployment চেক করুন।");
-      }
-    } else {
-      setStatus("unsupported");
-      const h = pushHistory(SAVER_HISTORY_KEY, {
-        id: crypto.randomUUID(),
-        name: url,
-        platform: p,
-        status: "unsupported",
-        at: Date.now(),
-      });
-      setHistory(h);
-    }
-  }
-
-  function clearHistory() {
-    window.localStorage.removeItem(SAVER_HISTORY_KEY);
-    setHistory([]);
-  }
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Card>
         <CardHeader>
-          <CardTitle>লিংক পেস্ট করুন</CardTitle>
-          <CardDescription>Facebook/YouTube সহ supported public link অথবা direct video file URL</CardDescription>
+          <CardTitle>All-in-One Video Downloader</CardTitle>
+          <CardDescription>
+            Facebook, YouTube, Instagram, TikTok সহ supported public video link পেস্ট করে ভিডিও ডাউনলোড করুন।
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-2">
-            <Input
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setStatus("idle");
-              }}
-              placeholder="ভিডিও লিংক পেস্ট করুন..."
-              className="flex-1"
-            />
-            <Button type="button" variant="secondary" size="icon" onClick={handlePaste} title="পেস্ট করুন">
-              <ClipboardPaste size={16} />
-            </Button>
-            <Button type="button" variant="secondary" size="icon" onClick={handleClear} title="মুছে ফেলুন">
-              <X size={16} />
-            </Button>
-          </div>
-
-          {url.trim() && (
-            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <meta.icon size={15} />
-              <span>প্ল্যাটফর্ম শনাক্ত: {meta.label}</span>
-            </div>
-          )}
-
-          <Button type="button" className="w-full" onClick={handleProcess} disabled={!url.trim() || status === "checking"}>
-            {status === "checking" ? <Loader2 size={16} className="animate-spin" /> : null}
-            প্রসেস করুন
-          </Button>
-
-          {status === "error" && (
-            <div className="flex items-start gap-2 text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {status === "unsupported" && (
-            <div className="flex items-start gap-2 text-[13px] text-warning bg-warning/10 border border-warning/20 rounded-xl px-3.5 py-3">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <span>
-                {meta.label}-এর লিংক ডাউনলোড করতে Backend প্রয়োজন। Backend সেটআপ না থাকলে direct video URL ব্যবহার করুন।
-              </span>
-            </div>
-          )}
-
-          {status === "ready" && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[13px] text-success bg-success/10 border border-success/20 rounded-xl px-3.5 py-3">
-                <CheckCircle2 size={16} />
-                <span>লিংক প্রস্তুত। ডাউনলোড শুরু করুন।</span>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => {
-                  const fileName = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() || "video.mp4");
-                  const downloadUrl = getDownloadUrl(url);
-                  if (!saveVideoFromUrl(downloadUrl, fileName)) {
-                    // Not inside the Android app — normal browser download.
-                    const a = document.createElement("a");
-                    a.href = downloadUrl;
-                    a.download = fileName;
-                    a.rel = "noopener noreferrer";
-                    a.target = "_blank";
-                    a.click();
-                  }
-                }}
-              >
-                <Download size={16} /> ডাউনলোড করুন
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <History size={16} className="text-muted-foreground" />
-            <CardTitle>Download History</CardTitle>
-          </div>
-          {history.length > 0 && (
-            <Button type="button" variant="ghost" size="sm" onClick={clearHistory}>
-              <Trash2 size={14} /> মুছুন
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          {history.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">এখনো কোনো হিস্টোরি নেই।</p>
-          ) : (
-            <ul className="space-y-2">
-              {history.map((h) => {
-                const hMeta = PLATFORM_META[h.platform];
-                return (
-                  <li key={h.id} className="flex items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0">
-                    <hMeta.icon size={14} className="text-muted-foreground shrink-0" />
-                    <span className="truncate flex-1">{h.name}</span>
-                    <span
-                      className={
-                        h.status === "ready"
-                          ? "text-success text-xs font-semibold shrink-0"
-                          : "text-warning text-xs font-semibold shrink-0"
-                      }
-                    >
-                      {h.status === "ready" ? "Ready to download" : "Unsupported"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+        <CardContent className="p-2 sm:p-3">
+          <iframe
+            src="/video-downloader.html"
+            title="All-in-One Video Downloader"
+            className="w-full min-h-[1050px] sm:min-h-[1150px] border-0 rounded-lg bg-background"
+            loading="lazy"
+          />
         </CardContent>
       </Card>
     </div>
