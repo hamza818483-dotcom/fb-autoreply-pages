@@ -342,30 +342,22 @@ async function reactToComment(
   const log = dlog || { add: async () => {} };
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
-    // Try LOVE reaction first via the reactions edge (supports type=LOVE).
-    // Falls back to a plain like if LOVE is rejected for any reason, so
-    // auto-react never silently stops working.
-    const res = await fetch(
-      `${GRAPH}/${commentId}/reactions?type=LOVE&access_token=${encodeURIComponent(token || "")}`,
-      { method: "POST", signal: AbortSignal.timeout(15000) }
-    );
+    // LOVE via the /reactions edge requires an app capability this app
+    // doesn't have (Graph error #3: "Application does not have the
+    // capability to make this API call") — that's an app-level Facebook
+    // restriction, not fixable via token/permissions. Reverted to the
+    // plain /likes endpoint, which works without that capability.
+    const res = await fetch(`${GRAPH}/${commentId}/likes?access_token=${encodeURIComponent(token || "")}`, {
+      method: "POST",
+      signal: AbortSignal.timeout(15000),
+    });
     const data = await res.json();
     if (!res.ok) {
-      await log.add(`⚠️ LOVE react failed (HTTP ${res.status}): ${JSON.stringify(data).slice(0, 300)}\nFalling back to plain like...`);
-      console.error("[fb-webhook] LOVE react failed, falling back to like:", JSON.stringify(data));
-      const fallback = await fetch(`${GRAPH}/${commentId}/likes?access_token=${encodeURIComponent(token || "")}`, {
-        method: "POST",
-        signal: AbortSignal.timeout(15000),
-      });
-      const fbData = await fallback.json();
-      if (!fallback.ok) {
-        console.error("[fb-webhook] like fallback also failed:", JSON.stringify(fbData));
-      } else {
-        await log.add(`✅ Fallback LIKE succeeded (LOVE was rejected)`);
-      }
-      return fbData;
+      await log.add(`❌ Like react failed (HTTP ${res.status}): ${JSON.stringify(data).slice(0, 300)}`);
+      console.error("[fb-webhook] react failed:", JSON.stringify(data));
+    } else {
+      await log.add(`✅ Reacted`);
     }
-    await log.add(`✅ LOVE reaction succeeded`);
     return data;
   } catch (e: any) {
     await log.add(`❌ reactToComment exception: ${e.message}`);
