@@ -70,15 +70,15 @@ export function PagesSection() {
         <div className="mb-4 space-y-2.5">
           {pages.map((p) => (
             <Card key={p.page_id}>
-              <div className="flex items-center gap-2.5">
-                <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex-1 min-w-0 basis-full sm:basis-auto">
                   <p className="font-bold text-[15px] truncate">{p.page_name || p.page_id}</p>
                   <p className="text-[12px] text-muted-foreground truncate">Page ID: {p.page_id}</p>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => startEdit(p.page_id)}>
+                <Button variant="secondary" size="sm" className="shrink-0" onClick={() => startEdit(p.page_id)}>
                   <Pencil size={14} /> টোকেন আপডেট
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => removePage(p.page_id)}>
+                <Button variant="secondary" size="sm" className="shrink-0" onClick={() => removePage(p.page_id)}>
                   <Trash2 size={14} />
                 </Button>
               </div>
