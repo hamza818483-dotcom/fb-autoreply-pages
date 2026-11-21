@@ -12,6 +12,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* Hardcoded as a fallback in case Next.js's generated viewport
             export (above) isn't being emitted correctly under the
             @cloudflare/next-on-pages edge runtime adapter used here. */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
