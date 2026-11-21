@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse\nfrom starlette.background import BackgroundTask
 from yt_dlp import YoutubeDL
 
 app = FastAPI(title="Authorized Public Video Downloader")
@@ -44,7 +44,7 @@ def download(url: str = Query(..., min_length=8, max_length=2048)):
     workdir = Path(tempfile.mkdtemp(prefix="video-", dir=DOWNLOAD_DIR))
     outtmpl = str(workdir / "%(title).100s-%(id)s.%(ext)s")
     opts = {
-        "format": "best[ext=mp4]/best",
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]",
         "outtmpl": outtmpl,
         "merge_output_format": "mp4",
         "noplaylist": True,
