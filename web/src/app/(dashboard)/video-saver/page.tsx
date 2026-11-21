@@ -119,6 +119,45 @@ type HistoryItem = {
 };
 
 const SAVER_HISTORY_KEY = "video-saver:history";
+const QUOTA_STORAGE_KEY = "video-saver:rapidapi-quota";
+
+type RapidApiQuota = {
+  limit: number | null;
+  remaining: number | null;
+  reset: number | null;
+  at: number;
+};
+
+function loadQuota(): RapidApiQuota | null {
+  try {
+    const raw = window.localStorage.getItem(QUOTA_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as RapidApiQuota;
+  } catch {
+    return null;
+  }
+}
+
+function saveQuota(q: RapidApiQuota) {
+  try {
+    window.localStorage.setItem(QUOTA_STORAGE_KEY, JSON.stringify(q));
+  } catch {
+    // ignore storage errors (private mode, quota exceeded, etc.)
+  }
+}
+
+function parseQuotaFromHeaders(headers: Headers): RapidApiQuota | null {
+  const limit = headers.get("x-ratelimit-requests-limit");
+  const remaining = headers.get("x-ratelimit-requests-remaining");
+  const reset = headers.get("x-ratelimit-requests-reset");
+  if (limit === null && remaining === null && reset === null) return null;
+  return {
+    limit: limit !== null ? Number(limit) : null,
+    remaining: remaining !== null ? Number(remaining) : null,
+    reset: reset !== null ? Number(reset) : null,
+    at: Date.now(),
+  };
+}
 const CLIP_HISTORY_KEY = "video-saver:clip-history";
 
 function loadHistory(key: string): HistoryItem[] {
@@ -252,9 +291,11 @@ function SaverTab() {
   const [downloadingIdx, setDownloadingIdx] = React.useState<number | null>(null);
   const [thumbQuality, setThumbQuality] = React.useState("maxresdefault");
   const [history, setHistory] = React.useState<HistoryItem[]>([]);
+  const [quota, setQuota] = React.useState<RapidApiQuota | null>(null);
 
   React.useEffect(() => {
     setHistory(loadHistory(SAVER_HISTORY_KEY));
+    setQuota(loadQuota());
   }, []);
 
   function clearHistory() {
@@ -277,6 +318,11 @@ function SaverTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmed }),
       });
+      const parsedQuota = parseQuotaFromHeaders(res.headers);
+      if (parsedQuota) {
+        setQuota(parsedQuota);
+        saveQuota(parsedQuota);
+      }
       if (!res.ok) throw new Error("Network response was not ok");
       const data = await res.json();
       if (data.error) throw new Error(data.message || "Failed to fetch video");
@@ -345,6 +391,17 @@ function SaverTab() {
             <div className="flex items-start gap-2 text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {quota && (quota.limit !== null || quota.remaining !== null) && (
+            <div className="flex items-center justify-between text-[12px] text-muted-foreground bg-muted/40 border rounded-xl px-3.5 py-2">
+              <span>
+                RapidAPI quota: {quota.remaining ?? "?"} / {quota.limit ?? "?"} remaining
+              </span>
+              <span className="shrink-0">
+                {new Date(quota.at).toLocaleTimeString()}
+              </span>
             </div>
           )}
         </CardContent>

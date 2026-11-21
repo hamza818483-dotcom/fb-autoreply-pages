@@ -3,7 +3,16 @@ export const dynamic = "force-dynamic";
 const RAPIDAPI_HOST = "social-download-all-in-one.p.rapidapi.com";
 const RAPIDAPI_URL = `https://${RAPIDAPI_HOST}/v1/social/autolink`;
 const ALLOWED_HOSTS = new Set(["facebook.com","www.facebook.com","m.facebook.com","fb.watch","youtube.com","www.youtube.com","m.youtube.com","youtu.be","instagram.com","www.instagram.com","tiktok.com","www.tiktok.com","vm.tiktok.com","vt.tiktok.com","twitter.com","www.twitter.com","x.com","www.x.com","pinterest.com","www.pinterest.com","pin.it"]);
-function json(data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } }); }
+function json(data: unknown, status = 200, extraHeaders?: Record<string, string>) { return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders } }); }
+const QUOTA_HEADERS = ["x-ratelimit-requests-limit", "x-ratelimit-requests-remaining", "x-ratelimit-requests-reset"];
+function extractQuotaHeaders(h: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of QUOTA_HEADERS) {
+    const v = h.get(key);
+    if (v !== null) out[key] = v;
+  }
+  return out;
+}
 export async function POST(request: Request) {
   const apiKey = process.env.RAPIDAPI_KEY;
   if (!apiKey) return json({ error: true, message: "Server configuration missing: RAPIDAPI_KEY" }, 500);
@@ -16,9 +25,10 @@ export async function POST(request: Request) {
   if (!ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) return json({ error: true, message: "This website is not in the supported platform list." }, 400);
   try {
     const upstream = await fetch(RAPIDAPI_URL, { method: "POST", headers: { "Content-Type": "application/json", "X-RapidAPI-Host": RAPIDAPI_HOST, "X-RapidAPI-Key": apiKey }, body: JSON.stringify({ url: parsed.toString() }) });
+    const quota = extractQuotaHeaders(upstream.headers);
     const raw = await upstream.text();
     let data: unknown;
-    try { data = JSON.parse(raw); } catch { return json({ error: true, message: "Video provider returned an invalid response." }, 502); }
-    return json(data, upstream.status);
+    try { data = JSON.parse(raw); } catch { return json({ error: true, message: "Video provider returned an invalid response." }, 502, quota); }
+    return json(data, upstream.status, quota);
   } catch { return json({ error: true, message: "Could not connect to the video provider. Please try again." }, 502); }
 }
