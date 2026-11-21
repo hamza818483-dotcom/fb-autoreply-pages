@@ -72,6 +72,11 @@ class MainActivity : AppCompatActivity() {
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(webView, true)
 
+        // Bridge is scoped to this WebView, which (via shouldOverrideUrlLoading
+        // below) only ever navigates to the dashboard's own origin / Supabase —
+        // never to arbitrary third-party content.
+        webView.addJavascriptInterface(VideoSaverBridge(this), "AndroidVideoSaver")
+
         webView.webViewClient = object : WebViewClient() {
 
             override fun shouldOverrideUrlLoading(

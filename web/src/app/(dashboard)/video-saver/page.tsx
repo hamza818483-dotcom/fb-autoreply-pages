@@ -29,6 +29,47 @@ import { useAuth } from "@/components/providers/auth-provider";
  * Shared helpers
  * ------------------------------------------------------------------- */
 
+// Present only inside the FB AutoReply Android app's WebView (see
+// android/.../VideoSaverBridge.kt). In a normal browser this is
+// undefined and callers fall back to a regular <a download> link.
+declare global {
+  interface Window {
+    AndroidVideoSaver?: {
+      saveFromUrl: (url: string, fileName: string) => void;
+      saveFromBase64: (base64: string, fileName: string) => void;
+    };
+  }
+}
+
+function isAndroidAppWebView(): boolean {
+  return typeof window !== "undefined" && !!window.AndroidVideoSaver;
+}
+
+/** Saves a direct video URL. Inside the Android app this lands as a real
+ * .mp4 in Movies/FBAutoReply via MediaStore; in a browser it's a normal
+ * file download. */
+function saveVideoFromUrl(url: string, fileName: string) {
+  if (isAndroidAppWebView()) {
+    window.AndroidVideoSaver!.saveFromUrl(url, fileName);
+    return true;
+  }
+  return false;
+}
+
+/** Saves an in-browser-produced video (e.g. Clip Maker's trimmed blob) as
+ * a real .mp4 in Movies/FBAutoReply when running inside the Android app. */
+async function saveVideoFromBlob(blob: Blob, fileName: string) {
+  if (!isAndroidAppWebView()) return false;
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  window.AndroidVideoSaver!.saveFromBase64(base64, fileName);
+  return true;
+}
+
 type Platform = "facebook" | "youtube" | "instagram" | "tiktok" | "direct" | "unknown";
 
 function detectPlatform(url: string): Platform {
@@ -270,11 +311,25 @@ function SaverTab() {
                 <CheckCircle2 size={16} />
                 <span>ভিডিও ফাইল লিংক বৈধ — ডাউনলোড করতে পারবেন।</span>
               </div>
-              <a href={url} download target="_blank" rel="noopener noreferrer" className="block">
-                <Button type="button" variant="secondary" className="w-full">
-                  <Download size={16} /> ডাউনলোড করুন
-                </Button>
-              </a>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => {
+                  const fileName = url.split("/").pop() || "video";
+                  if (!saveVideoFromUrl(url, fileName)) {
+                    // Not inside the Android app — normal browser download.
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = fileName;
+                    a.rel = "noopener noreferrer";
+                    a.target = "_blank";
+                    a.click();
+                  }
+                }}
+              >
+                <Download size={16} /> ডাউনলোড করুন
+              </Button>
             </div>
           )}
         </CardContent>
@@ -359,6 +414,7 @@ function CutterTab() {
   const [progress, setProgress] = React.useState(0);
   const [cancelRequested, setCancelRequested] = React.useState(false);
   const [resultUrl, setResultUrl] = React.useState<string | null>(null);
+  const [resultBlob, setResultBlob] = React.useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
   const [sizeWarning, setSizeWarning] = React.useState("");
   const [history, setHistory] = React.useState<HistoryItem[]>([]);
@@ -372,6 +428,7 @@ function CutterTab() {
     setStart("00:00:00");
     setEnd("00:00:00");
     setResultUrl(null);
+    setResultBlob(null);
     setErrorMsg("");
     setProgress(0);
   }
@@ -440,6 +497,7 @@ function CutterTab() {
   async function handleCutAndSave() {
     setErrorMsg("");
     setResultUrl(null);
+    setResultBlob(null);
     const startSec = toSeconds(start);
     const endSec = toSeconds(end);
     if (startSec === null || endSec === null) {
@@ -490,6 +548,7 @@ function CutterTab() {
       const blob = new Blob([new Uint8Array(bytes).buffer], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
       setResultUrl(url);
+      setResultBlob(blob);
 
       const clipName = `clip-${start.replace(/:/g, "")}-${end.replace(/:/g, "")}.mp4`;
       const h = pushHistory(CLIP_HISTORY_KEY, {
@@ -666,11 +725,23 @@ function CutterTab() {
             {resultUrl && (
               <div className="space-y-2">
                 <video src={resultUrl} controls className="w-full rounded-xl border border-border bg-black max-h-[260px]" />
-                <a href={resultUrl} download="clip.mp4" className="block">
-                  <Button type="button" variant="secondary" className="w-full">
-                    <Download size={16} /> ক্লিপ ডাউনলোড করুন
-                  </Button>
-                </a>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={async () => {
+                    const fileName = `clip-${start.replace(/:/g, "")}-${end.replace(/:/g, "")}.mp4`;
+                    const savedNatively = resultBlob ? await saveVideoFromBlob(resultBlob, fileName) : false;
+                    if (!savedNatively) {
+                      const a = document.createElement("a");
+                      a.href = resultUrl;
+                      a.download = fileName;
+                      a.click();
+                    }
+                  }}
+                >
+                  <Download size={16} /> ক্লিপ ডাউনলোড করুন
+                </Button>
               </div>
             )}
           </CardContent>
