@@ -41,7 +41,7 @@ declare global {
   }
 }
 
-const VIDEO_DOWNLOADER_API = process.env.NEXT_PUBLIC_VIDEO_DOWNLOADER_URL?.replace(/\\/$/, "");
+const VIDEO_DOWNLOADER_API = process.env.NEXT_PUBLIC_VIDEO_DOWNLOADER_URL?.replace(/\/+$/, "");
 
 function getDownloadUrl(sourceUrl: string): string {
   if (detectPlatform(sourceUrl) === "direct") return sourceUrl;
