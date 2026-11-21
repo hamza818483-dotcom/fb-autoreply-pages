@@ -2,8 +2,7 @@
 export const runtime = "edge";
 
 import * as React from "react";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output, Quality } from "mediabunny";
 import {
   Download,
   Scissors,
@@ -480,7 +479,7 @@ function SaverTab() {
 }
 
 /* ----------------------------------------------------------------------
- * Tab 2: Clip Maker (ffmpeg.wasm, browser-side trim)
+ * Tab 2: Clip Maker (Mediabunny, browser-side trim)
  * ------------------------------------------------------------------- */
 
 function toSeconds(hms: string): number | null {
@@ -501,7 +500,7 @@ const MAX_CLIP_SOURCE_MB = 300; // soft warning threshold for in-browser process
 
 function CutterTab() {
   const videoRef = React.useRef<HTMLVideoElement>(null);
-  const ffmpegRef = React.useRef<import("@ffmpeg/ffmpeg").FFmpeg | null>(null);
+  const conversionRef = React.useRef<Conversion | null>(null);
 
   const [sourceUrl, setSourceUrl] = React.useState<string | null>(null);
   const [sourceFile, setSourceFile] = React.useState<File | null>(null);
@@ -576,30 +575,6 @@ function CutterTab() {
     setEnd(toHMS(d));
   }
 
-  async function ensureFfmpegLoaded() {
-    if (ffmpegRef.current) return ffmpegRef.current;
-    setLoadingCore(true);
-    try {
-      const ffmpeg = new FFmpeg();
-      ffmpeg.on("progress", ({ progress: p }) => {
-        setProgress(Math.min(100, Math.round(p * 100)));
-      });
-      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-      // Keep FFmpeg's own worker outside the Next.js/Turbopack bundle.
-      // The postinstall script copies the package worker to /public/ffmpeg/worker.js.
-      const classWorkerURL = new URL("/ffmpeg/worker.js", window.location.href).href;
-      await ffmpeg.load({
-        classWorkerURL,
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      });
-      ffmpegRef.current = ffmpeg;
-      return ffmpeg;
-    } finally {
-      setLoadingCore(false);
-    }
-  }
-
   async function handleCutAndSave() {
     setErrorMsg("");
     setResultUrl(null);
@@ -625,56 +600,79 @@ function CutterTab() {
 
     setCancelRequested(false);
     setProcessing(true);
+    setLoadingCore(true);
     setProgress(0);
     setDiagnosticDetails("");
-    let currentStage = "FFmpeg engine / worker load";
-    let lastFfmpegLog = "";
+    let currentStage = "Source video fetch";
+    let sourceBlob: Blob | null = null;
+    let conversion: Conversion | null = null;
+
     try {
-      const ffmpeg = await ensureFfmpegLoaded();
+      if (sourceFile) {
+        sourceBlob = sourceFile;
+      } else {
+        const response = await fetch(sourceUrl);
+        if (!response.ok) {
+          throw new Error(`Source fetch failed: HTTP ${response.status} ${response.statusText}`);
+        }
+        sourceBlob = await response.blob();
+      }
+      if (!sourceBlob || sourceBlob.size === 0) {
+        throw new Error("Fetched source is empty (0 bytes).");
+      }
       if (cancelRequested) return;
-      ffmpeg.on("log", ({ message }) => {
-        lastFfmpegLog = message;
+
+      currentStage = "Mediabunny input initialization";
+      const input = new Input({
+        formats: ALL_FORMATS,
+        source: new BlobSource(sourceBlob),
+      });
+      const output = new Output({
+        format: new Mp4OutputFormat({ fastStart: "in-memory" }),
+        target: new BufferTarget(),
       });
 
-      const inputName = "input" + (sourceFile ? guessExt(sourceFile.name) : guessExt(sourceUrl));
-      const outputName = "output.mp4";
+      currentStage = "Mediabunny conversion setup / codec capability";
+      conversion = await Conversion.init({
+        input,
+        output,
+        tracks: "primary",
+        trim: { start: startSec, end: endSec },
+        video: { codec: "avc", quality: new Quality("medium") },
+        audio: { codec: "aac", quality: new Quality("medium") },
+        copy: false,
+      });
+      conversionRef.current = conversion;
+      setLoadingCore(false);
 
-      currentStage = "Fetching source video";
-      const inputData = await fetchFile(sourceFile ?? sourceUrl);
-      currentStage = "Writing source video into FFmpeg memory";
-      await ffmpeg.writeFile(inputName, inputData);
+      if (!conversion.isValid) {
+        const discarded = conversion.discardedTracks.map((item) => item.reason).join(", ");
+        throw new Error(`No valid output track configuration. Discarded tracks: ${discarded || "unknown"}`);
+      }
+      if (cancelRequested) {
+        await conversion.cancel();
+        return;
+      }
+
+      currentStage = "Video decode / audio decode / MP4 encode";
+      conversion.onProgress = (value) => {
+        setProgress(Math.min(99, Math.max(0, Math.round(value * 100))));
+      };
+      await conversion.execute();
       if (cancelRequested) return;
 
-      // Re-encode to a broadly compatible MP4. Stream-copy can fail on
-      // social-platform sources with unusual containers/codecs or cut points.
-      currentStage = "Cutting and encoding MP4 (FFmpeg)";
-      const clipDuration = Math.max(0.1, endSec - startSec);
-      await ffmpeg.exec([
-        "-i", inputName,
-        "-ss", String(startSec),
-        "-t", String(clipDuration),
-        "-map", "0:v:0",
-        "-map", "0:a?",
-        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "28",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-movflags", "+faststart",
-        "-f", "mp4",
-        outputName,
-      ]);
-      if (cancelRequested) return;
+      currentStage = "Reading completed MP4 output";
+      const buffer = output.target.buffer;
+      if (!buffer || buffer.byteLength === 0) {
+        throw new Error("Mediabunny completed without producing an MP4 buffer.");
+      }
 
-      currentStage = "Reading encoded MP4 from FFmpeg";
-      const data = await ffmpeg.readFile(outputName);
-      const bytes = data as Uint8Array;
-      currentStage = "Creating downloadable MP4 file";
-      const blob = new Blob([new Uint8Array(bytes).buffer], { type: "video/mp4" });
+      currentStage = "Creating downloadable MP4";
+      const blob = new Blob([buffer], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
       setResultUrl(url);
       setResultBlob(blob);
+      setProgress(100);
 
       const clipName = `clip-${start.replace(/:/g, "")}-${end.replace(/:/g, "")}.mp4`;
       const h = pushHistory(CLIP_HISTORY_KEY, {
@@ -694,30 +692,30 @@ function CutterTab() {
         const details = [
           `Failed stage: ${currentStage}`,
           `Error: ${errorText || "Unknown error"}`,
-          lastFfmpegLog ? `Last FFmpeg log: ${lastFfmpegLog}` : "",
+          e instanceof Error && e.stack ? `Stack: ${e.stack}` : "",
+          `Engine: Mediabunny (WebCodecs)`,
           `Source: ${sourceFile ? "uploaded file" : "remote video URL"}`,
+          `Source MIME: ${sourceBlob?.type || "unknown"}`,
+          `Source size: ${sourceBlob ? sourceBlob.size + " bytes" : "not fetched"}`,
           `Selected clip: ${start} - ${end}`,
+          `Browser: ${navigator.userAgent}`,
         ].filter(Boolean).join("\n");
         setDiagnosticDetails(details);
         setErrorMsg(`ক্লিপ তৈরি করা যায়নি। ব্যর্থ ধাপ: ${currentStage}। বিস্তারিত নিচে দেখুন।`);
       }
     } finally {
+      conversionRef.current = null;
+      setLoadingCore(false);
       setProcessing(false);
     }
   }
 
   function handleCancel() {
     setCancelRequested(true);
-    setProcessing(false);
     setProgress(0);
-    // ffmpeg.wasm has no clean mid-exec abort in the single-thread core;
-    // terminating the instance is the reliable way to stop work in progress.
-    try {
-      ffmpegRef.current?.terminate();
-    } catch {
-      /* no-op */
-    }
-    ffmpegRef.current = null;
+    void conversionRef.current?.cancel().catch(() => {
+      // The conversion may already have completed or been canceled.
+    });
     setErrorMsg("প্রসেসিং বাতিল করা হয়েছে।");
   }
 
@@ -840,7 +838,7 @@ function CutterTab() {
                 <div className="flex items-center justify-between text-[13px] text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Loader2 size={14} className="animate-spin" />
-                    {loadingCore ? "প্রসেসিং ইঞ্জিন লোড হচ্ছে..." : `প্রসেস হচ্ছে... ${progress}%`}
+                    {loadingCore ? "Mediabunny প্রস্তুত হচ্ছে..." : `প্রসেস হচ্ছে... ${progress}%`}
                   </span>
                   <Button type="button" variant="ghost" size="sm" onClick={handleCancel}>
                     বাতিল করুন
