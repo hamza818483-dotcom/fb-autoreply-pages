@@ -249,6 +249,7 @@ function SaverTab() {
   const [url, setUrl] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState("");
+  const [diagnosticDetails, setDiagnosticDetails] = React.useState("");
   const [result, setResult] = React.useState<DownloaderResult | null>(null);
   const [downloadingIdx, setDownloadingIdx] = React.useState<number | null>(null);
   const [thumbQuality, setThumbQuality] = React.useState("maxresdefault");
@@ -625,18 +626,28 @@ function CutterTab() {
     setCancelRequested(false);
     setProcessing(true);
     setProgress(0);
+    setDiagnosticDetails("");
+    let currentStage = "FFmpeg engine / worker load";
+    let lastFfmpegLog = "";
     try {
       const ffmpeg = await ensureFfmpegLoaded();
       if (cancelRequested) return;
+      ffmpeg.on("log", ({ message }) => {
+        lastFfmpegLog = message;
+      });
 
       const inputName = "input" + (sourceFile ? guessExt(sourceFile.name) : guessExt(sourceUrl));
       const outputName = "output.mp4";
 
-      await ffmpeg.writeFile(inputName, await fetchFile(sourceFile ?? sourceUrl));
+      currentStage = "Fetching source video";
+      const inputData = await fetchFile(sourceFile ?? sourceUrl);
+      currentStage = "Writing source video into FFmpeg memory";
+      await ffmpeg.writeFile(inputName, inputData);
       if (cancelRequested) return;
 
       // Re-encode to a broadly compatible MP4. Stream-copy can fail on
       // social-platform sources with unusual containers/codecs or cut points.
+      currentStage = "Cutting and encoding MP4 (FFmpeg)";
       const clipDuration = Math.max(0.1, endSec - startSec);
       await ffmpeg.exec([
         "-i", inputName,
@@ -656,8 +667,10 @@ function CutterTab() {
       ]);
       if (cancelRequested) return;
 
+      currentStage = "Reading encoded MP4 from FFmpeg";
       const data = await ffmpeg.readFile(outputName);
       const bytes = data as Uint8Array;
+      currentStage = "Creating downloadable MP4 file";
       const blob = new Blob([new Uint8Array(bytes).buffer], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
       setResultUrl(url);
@@ -674,11 +687,19 @@ function CutterTab() {
       setHistory(h);
     } catch (e) {
       if (!cancelRequested) {
-        setErrorMsg(
-          "ক্লিপ তৈরি করা যায়নি — ফাইল ফরম্যাট/কোডেক সাপোর্টেড নাও হতে পারে, অথবা ডিভাইসে পর্যাপ্ত মেমরি নেই। (" +
-            (e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e) || "unknown error") +
-            ")"
-        );
+        const errorText =
+          e instanceof Error ? `${e.name}: ${e.message}` :
+          typeof e === "string" ? e :
+          (() => { try { return JSON.stringify(e); } catch { return String(e); } })();
+        const details = [
+          `Failed stage: ${currentStage}`,
+          `Error: ${errorText || "Unknown error"}`,
+          lastFfmpegLog ? `Last FFmpeg log: ${lastFfmpegLog}` : "",
+          `Source: ${sourceFile ? "uploaded file" : "remote video URL"}`,
+          `Selected clip: ${start} - ${end}`,
+        ].filter(Boolean).join("\n");
+        setDiagnosticDetails(details);
+        setErrorMsg(`ক্লিপ তৈরি করা যায়নি। ব্যর্থ ধাপ: ${currentStage}। বিস্তারিত নিচে দেখুন।`);
       }
     } finally {
       setProcessing(false);
@@ -829,9 +850,26 @@ function CutterTab() {
             )}
 
             {errorMsg && (
-              <div className="flex items-start gap-2 text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
-                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                <span>{errorMsg}</span>
+              <div className="space-y-2 text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                {diagnosticDetails && (
+                  <div className="space-y-2">
+                    <pre className="whitespace-pre-wrap break-words rounded-lg bg-background/70 p-2 text-[11px] text-foreground">{diagnosticDetails}</pre>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(diagnosticDetails);
+                      }}
+                    >
+                      Error details কপি করুন
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
