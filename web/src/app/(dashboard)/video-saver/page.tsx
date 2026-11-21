@@ -321,7 +321,11 @@ function CutterTab() {
         setProgress(Math.min(100, Math.round(p * 100)));
       });
       const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+      // Keep FFmpeg's own worker outside the Next.js/Turbopack bundle.
+      // The postinstall script copies the package worker to /public/ffmpeg/worker.js.
+      const classWorkerURL = new URL("/ffmpeg/worker.js", window.location.href).href;
       await ffmpeg.load({
+        classWorkerURL,
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
       });
