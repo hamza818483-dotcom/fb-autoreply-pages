@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 export const runtime = "edge";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
@@ -6,6 +6,12 @@ import { AuthProvider } from "@/components/providers/auth-provider";
 export const metadata: Metadata = {
   title: "FB Auto-Reply Dashboard",
   description: "ATLAS Facebook comment auto-reply control panel",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
