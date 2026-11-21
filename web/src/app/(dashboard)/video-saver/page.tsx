@@ -105,7 +105,7 @@ type HistoryItem = {
   id: string;
   name: string;
   platform: Platform;
-  status: "done" | "unsupported" | "error";
+  status: "ready" | "unsupported" | "error";
   at: number;
 };
 
@@ -151,7 +151,7 @@ export default function VideoSaverPage() {
     <div>
       <h1 className="text-lg font-bold tracking-tight mb-1">Video Saver</h1>
       <p className="text-[13px] text-muted-foreground mb-4">
-        ভিডিও লিংক সেভ করুন অথবা আপলোড করা ভিডিও থেকে ক্লিপ কেটে নিন।
+        সরাসরি ভিডিও ফাইল ডাউনলোড করুন অথবা নিজের ভিডিও থেকে ক্লিপ তৈরি করুন।
       </p>
 
       <div className="flex gap-2 mb-4 bg-muted rounded-xl p-1">
@@ -227,7 +227,7 @@ function SaverTab() {
           id: crypto.randomUUID(),
           name: url.split("/").pop() || url,
           platform: p,
-          status: "done",
+          status: "ready",
           at: Date.now(),
         });
         setHistory(h);
@@ -255,7 +255,7 @@ function SaverTab() {
       <Card>
         <CardHeader>
           <CardTitle>লিংক পেস্ট করুন</CardTitle>
-          <CardDescription>Facebook, YouTube, Instagram, TikTok অথবা ডাইরেক্ট ভিডিও ফাইল লিংক</CardDescription>
+          <CardDescription>ডাইরেক্ট ভিডিও ফাইল URL (.mp4, .webm, .mov, .m4v)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-2">
@@ -309,14 +309,14 @@ function SaverTab() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[13px] text-success bg-success/10 border border-success/20 rounded-xl px-3.5 py-3">
                 <CheckCircle2 size={16} />
-                <span>ভিডিও ফাইল লিংক বৈধ — ডাউনলোড করতে পারবেন।</span>
+                <span>ডাইরেক্ট ভিডিও লিংক শনাক্ত হয়েছে। ডাউনলোড শুরু করুন।</span>
               </div>
               <Button
                 type="button"
                 variant="secondary"
                 className="w-full"
                 onClick={() => {
-                  const fileName = url.split("/").pop() || "video";
+                  const fileName = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() || "video");
                   if (!saveVideoFromUrl(url, fileName)) {
                     // Not inside the Android app — normal browser download.
                     const a = document.createElement("a");
@@ -360,12 +360,12 @@ function SaverTab() {
                     <span className="truncate flex-1">{h.name}</span>
                     <span
                       className={
-                        h.status === "done"
+                        h.status === "ready"
                           ? "text-success text-xs font-semibold shrink-0"
                           : "text-warning text-xs font-semibold shrink-0"
                       }
                     >
-                      {h.status === "done" ? "Downloaded" : "Unsupported"}
+                      {h.status === "ready" ? "Ready to download" : "Unsupported"}
                     </span>
                   </li>
                 );
@@ -555,7 +555,7 @@ function CutterTab() {
         id: crypto.randomUUID(),
         name: clipName,
         platform: "direct",
-        status: "done",
+        status: "ready",
         at: Date.now(),
       });
       setHistory(h);
@@ -769,7 +769,7 @@ function CutterTab() {
                 <li key={h.id} className="flex items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0">
                   <FileVideo size={14} className="text-muted-foreground shrink-0" />
                   <span className="truncate flex-1">{h.name}</span>
-                  <span className="text-success text-xs font-semibold shrink-0">Saved</span>
+                  <span className="text-success text-xs font-semibold shrink-0">Clip created</span>
                 </li>
               ))}
             </ul>
