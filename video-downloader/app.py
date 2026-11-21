@@ -6,7 +6,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse\nfrom starlette.background import BackgroundTask
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from yt_dlp import YoutubeDL
 
 app = FastAPI(title="Authorized Public Video Downloader")
