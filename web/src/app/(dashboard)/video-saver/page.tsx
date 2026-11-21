@@ -333,9 +333,9 @@ function SaverTab() {
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleFetch()}
               placeholder="ভিডিও লিংক পেস্ট করুন..."
-              className="flex-1"
+              className="flex-1 min-w-0"
             />
-            <Button type="button" onClick={handleFetch} disabled={loading}>
+            <Button type="button" onClick={handleFetch} disabled={loading} className="shrink-0">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               Fetch
             </Button>
@@ -371,7 +371,7 @@ function SaverTab() {
                 <select
                   value={thumbQuality}
                   onChange={(e) => setThumbQuality(e.target.value)}
-                  className="flex-1 h-9 rounded-lg border border-border bg-background text-[13px] px-2.5"
+                  className="flex-1 min-w-0 h-9 rounded-lg border border-border bg-background text-[13px] px-2.5"
                 >
                   <option value="maxresdefault">Maximum Quality</option>
                   <option value="sddefault">Standard Quality</option>
@@ -382,6 +382,7 @@ function SaverTab() {
                 <Button
                   type="button"
                   variant="secondary"
+                  className="shrink-0"
                   onClick={() =>
                     forceDownload(
                       `https://img.youtube.com/vi/${ytId}/${thumbQuality}.jpg`,
@@ -458,7 +459,7 @@ function SaverTab() {
                     className="flex items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
                   >
                     <Icon size={14} className="text-muted-foreground shrink-0" />
-                    <span className="truncate flex-1">{h.name}</span>
+                    <span className="truncate flex-1 min-w-0">{h.name}</span>
                     <span
                       className={`text-xs font-semibold shrink-0 ${
                         h.status === "error" ? "text-destructive" : "text-success"
@@ -759,9 +760,9 @@ function CutterTab() {
               value={remoteUrl}
               onChange={(e) => setRemoteUrl(e.target.value)}
               placeholder="Facebook / YouTube / MP4 ভিডিও লিংক..."
-              className="flex-1"
+              className="flex-1 min-w-0"
             />
-            <Button type="button" variant="secondary" onClick={handleLoadRemote}>
+            <Button type="button" variant="secondary" onClick={handleLoadRemote} className="shrink-0">
               লোড করুন
             </Button>
           </div>
@@ -931,7 +932,7 @@ function CutterTab() {
               {history.map((h) => (
                 <li key={h.id} className="flex items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0">
                   <FileVideo size={14} className="text-muted-foreground shrink-0" />
-                  <span className="truncate flex-1">{h.name}</span>
+                  <span className="truncate flex-1 min-w-0">{h.name}</span>
                   <span className="text-success text-xs font-semibold shrink-0">Clip created</span>
                 </li>
               ))}
