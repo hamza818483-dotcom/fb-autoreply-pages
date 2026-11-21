@@ -2,6 +2,8 @@
 export const runtime = "edge";
 
 import * as React from "react";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import {
   Download,
   Scissors,
@@ -314,8 +316,6 @@ function CutterTab() {
     if (ffmpegRef.current) return ffmpegRef.current;
     setLoadingCore(true);
     try {
-      const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-      const { toBlobURL } = await import("@ffmpeg/util");
       const ffmpeg = new FFmpeg();
       ffmpeg.on("progress", ({ progress: p }) => {
         setProgress(Math.min(100, Math.round(p * 100)));
@@ -362,7 +362,6 @@ function CutterTab() {
       const ffmpeg = await ensureFfmpegLoaded();
       if (cancelRequested) return;
 
-      const { fetchFile } = await import("@ffmpeg/util");
       const inputName = "input" + (sourceFile ? guessExt(sourceFile.name) : guessExt(sourceUrl));
       const outputName = "output.mp4";
 
