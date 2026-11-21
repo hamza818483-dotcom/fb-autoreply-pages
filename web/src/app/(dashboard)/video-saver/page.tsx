@@ -192,9 +192,134 @@ export default function VideoSaverPage() {
  * Tab 1: Video Saver (URL paste → validate → platform detect → download)
  * ------------------------------------------------------------------- */
 
+type DownloaderMedia = {
+  quality?: string;
+  type: string;
+  extension: string;
+  data_size?: number;
+  url: string;
+};
+
+type DownloaderResult = {
+  title?: string;
+  author?: string;
+  thumbnail?: string;
+  medias?: DownloaderMedia[];
+};
+
+function formatQuality(q?: string) {
+  if (!q) return "Standard";
+  return q
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function formatFileSize(bytes?: number) {
+  if (!bytes) return "Unknown Size";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+function getYouTubeId(url: string) {
+  const m = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+  return m && m[2].length === 11 ? m[2] : null;
+}
+
+async function forceDownload(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch {
+    window.open(url, "_blank");
+  }
+}
+
 function SaverTab() {
+  const [url, setUrl] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [errorMsg, setErrorMsg] = React.useState("");
+  const [result, setResult] = React.useState<DownloaderResult | null>(null);
+  const [downloadingIdx, setDownloadingIdx] = React.useState<number | null>(null);
+  const [thumbQuality, setThumbQuality] = React.useState("maxresdefault");
+  const [history, setHistory] = React.useState<HistoryItem[]>([]);
+
+  React.useEffect(() => {
+    setHistory(loadHistory(SAVER_HISTORY_KEY));
+  }, []);
+
+  function clearHistory() {
+    window.localStorage.removeItem(SAVER_HISTORY_KEY);
+    setHistory([]);
+  }
+
+  async function handleFetch() {
+    const trimmed = url.trim();
+    if (!isValidUrl(trimmed)) {
+      setErrorMsg("সঠিক ভিডিও URL দিন।");
+      return;
+    }
+    setErrorMsg("");
+    setResult(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/video-downloader", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      if (!res.ok) throw new Error("Network response was not ok");
+      const data = await res.json();
+      if (data.error) throw new Error(data.message || "Failed to fetch video");
+      setResult(data);
+      const h = pushHistory(SAVER_HISTORY_KEY, {
+        id: crypto.randomUUID(),
+        name: data.title || trimmed,
+        platform: detectPlatform(trimmed),
+        status: "ready",
+        at: Date.now(),
+      });
+      setHistory(h);
+    } catch (e) {
+      setErrorMsg(
+        "ভিডিও ফেচ করা যায়নি — " + (e instanceof Error ? e.message : "অজানা সমস্যা হয়েছে।")
+      );
+      const h = pushHistory(SAVER_HISTORY_KEY, {
+        id: crypto.randomUUID(),
+        name: trimmed,
+        platform: detectPlatform(trimmed),
+        status: "error",
+        at: Date.now(),
+      });
+      setHistory(h);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleMediaDownload(media: DownloaderMedia, idx: number) {
+    setDownloadingIdx(idx);
+    try {
+      await forceDownload(media.url, `${result?.title || "video"}.${media.extension}`);
+    } finally {
+      setDownloadingIdx(null);
+    }
+  }
+
+  const ytId = getYouTubeId(url.trim());
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle>All-in-One Video Downloader</CardTitle>
@@ -202,13 +327,151 @@ function SaverTab() {
             Facebook, YouTube, Instagram, TikTok সহ supported public video link পেস্ট করে ভিডিও ডাউনলোড করুন।
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-2 sm:p-3">
-          <iframe
-            src="/video-downloader.html"
-            title="All-in-One Video Downloader"
-            className="w-full min-h-[1050px] sm:min-h-[1150px] border-0 rounded-lg bg-background"
-            loading="lazy"
-          />
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleFetch()}
+              placeholder="ভিডিও লিংক পেস্ট করুন..."
+              className="flex-1"
+            />
+            <Button type="button" onClick={handleFetch} disabled={loading}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              Fetch
+            </Button>
+          </div>
+
+          {errorMsg && (
+            <div className="flex items-start gap-2 text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {result && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="truncate">{result.title || "Video Found"}</CardTitle>
+            {result.author && <CardDescription>By {result.author}</CardDescription>}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {result.thumbnail && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={result.thumbnail}
+                alt="Thumbnail"
+                className="w-full rounded-xl border border-border max-h-[260px] object-cover"
+              />
+            )}
+
+            {ytId && (
+              <div className="flex gap-2">
+                <select
+                  value={thumbQuality}
+                  onChange={(e) => setThumbQuality(e.target.value)}
+                  className="flex-1 h-9 rounded-lg border border-border bg-background text-[13px] px-2.5"
+                >
+                  <option value="maxresdefault">Maximum Quality</option>
+                  <option value="sddefault">Standard Quality</option>
+                  <option value="hqdefault">High Quality</option>
+                  <option value="mqdefault">Medium Quality</option>
+                  <option value="default">Default Quality</option>
+                </select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    forceDownload(
+                      `https://img.youtube.com/vi/${ytId}/${thumbQuality}.jpg`,
+                      `youtube_thumbnail_${ytId}.jpg`
+                    )
+                  }
+                >
+                  থাম্বনেইল
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {result.medias && result.medias.length > 0 ? (
+                result.medias.map((media, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-2.5 border border-border rounded-xl px-3.5 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold truncate">{formatQuality(media.quality)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {media.type.toUpperCase()} • {media.extension.toUpperCase()} • {formatFileSize(media.data_size)}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleMediaDownload(media, idx)}
+                      disabled={downloadingIdx === idx}
+                    >
+                      {downloadingIdx === idx ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
+                      Download
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-[13px] text-muted-foreground text-center py-3">
+                  এই লিংকের জন্য কোনো ডাউনলোড অপশন পাওয়া যায়নি।
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <History size={16} className="text-muted-foreground" />
+            <CardTitle>Download History</CardTitle>
+          </div>
+          {history.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearHistory}>
+              <Trash2 size={14} /> মুছুন
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {history.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">এখনো কোনো ভিডিও ফেচ করা হয়নি।</p>
+          ) : (
+            <ul className="space-y-2">
+              {history.map((h) => {
+                const meta = PLATFORM_META[h.platform];
+                const Icon = meta.icon;
+                return (
+                  <li
+                    key={h.id}
+                    className="flex items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
+                  >
+                    <Icon size={14} className="text-muted-foreground shrink-0" />
+                    <span className="truncate flex-1">{h.name}</span>
+                    <span
+                      className={`text-xs font-semibold shrink-0 ${
+                        h.status === "error" ? "text-destructive" : "text-success"
+                      }`}
+                    >
+                      {h.status === "error" ? "Failed" : "Fetched"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>
