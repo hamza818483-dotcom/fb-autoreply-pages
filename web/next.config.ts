@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  serverExternalPackages: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],
   turbopack: {
     rules: {
       "*.css": {
