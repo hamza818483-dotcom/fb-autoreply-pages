@@ -518,6 +518,7 @@ function CutterTab() {
   const [resultBlob, setResultBlob] = React.useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
   const [diagnosticDetails, setDiagnosticDetails] = React.useState("");
+  const [successDiagnostics, setSuccessDiagnostics] = React.useState("");
   const [sizeWarning, setSizeWarning] = React.useState("");
   const [history, setHistory] = React.useState<HistoryItem[]>([]);
 
@@ -532,6 +533,8 @@ function CutterTab() {
     setResultUrl(null);
     setResultBlob(null);
     setErrorMsg("");
+    setDiagnosticDetails("");
+    setSuccessDiagnostics("");
     setProgress(0);
   }
 
@@ -605,6 +608,31 @@ function CutterTab() {
     setLoadingCore(true);
     setProgress(0);
     setDiagnosticDetails("");
+    setSuccessDiagnostics("");
+    const processingStartedAt = performance.now();
+    const collectNetworkDiagnostics = () => {
+      const entries = performance.getEntriesByType("resource")
+        .filter((entry) =>
+          entry.name.includes("/api/video-downloader/media?") &&
+          entry.startTime >= processingStartedAt
+        ) as (PerformanceResourceTiming & { responseStatus?: number })[];
+      const responseStatuses = entries
+        .map((entry) => entry.responseStatus)
+        .filter((status): status is number => typeof status === "number" && status > 0);
+      const transferredBytes = entries.reduce(
+        (total, entry) => total + (entry.encodedBodySize || entry.transferSize || 0),
+        0
+      );
+      const partialResponses = responseStatuses.filter((status) => status === 206).length;
+      const fullResponses = responseStatuses.filter((status) => status === 200).length;
+      return {
+        requests: entries.length,
+        statuses: responseStatuses,
+        partialResponses,
+        fullResponses,
+        transferredBytes,
+      };
+    };
     let currentStage = "Source video fetch";
     let sourceBlob: Blob | null = sourceFile;
     let conversion: Conversion | null = null;
@@ -678,6 +706,32 @@ function CutterTab() {
       setResultBlob(blob);
       setProgress(100);
 
+      const network = collectNetworkDiagnostics();
+      const elapsedSeconds = ((performance.now() - processingStartedAt) / 1000).toFixed(1);
+      const networkStatus = sourceFile
+        ? "Local file: no source network download"
+        : network.statuses.length === 0
+          ? "HTTP response status unavailable in this browser"
+          : network.fullResponses > 0
+            ? `Full response (HTTP 200): ${network.fullResponses}; partial range (HTTP 206): ${network.partialResponses}`
+            : `Partial range responses (HTTP 206): ${network.partialResponses}`;
+      const networkBytes = network.transferredBytes > 0
+        ? `${(network.transferredBytes / 1024 / 1024).toFixed(2)} MB (browser resource timing estimate)`
+        : "Not exposed by browser resource timing";
+      setSuccessDiagnostics([
+        "Clip processing completed",
+        `Selected range: ${start} - ${end}`,
+        `Requested clip duration: ${(endSec - startSec).toFixed(2)} seconds`,
+        `Cut mode: ${cutMode}`,
+        `Processing time: ${elapsedSeconds} seconds`,
+        `Output size: ${(blob.size / 1024 / 1024).toFixed(2)} MB (${blob.size} bytes)`,
+        `Source requests observed: ${sourceFile ? 0 : network.requests}`,
+        `Range status: ${networkStatus}`,
+        `Estimated source bytes transferred: ${networkBytes}`,
+        sourceFile ? `Uploaded source size: ${sourceFile.size} bytes` : "Remote source: proxied through video media endpoint",
+        "Note: browser timing is an estimate; unavailable status/size is not proof that only the selected bytes were fetched."
+      ].join("\n"));
+
       const clipName = `clip-${start.replace(/:/g, "")}-${end.replace(/:/g, "")}.mp4`;
       const h = pushHistory(CLIP_HISTORY_KEY, {
         id: crypto.randomUUID(),
@@ -703,6 +757,8 @@ function CutterTab() {
           `Source size: ${sourceBlob ? sourceBlob.size + " bytes" : "not fully downloaded; UrlSource cache capped at 32 MiB"}`,
           `Cut mode: ${cutMode}`,
           `Selected clip: ${start} - ${end}`,
+          `Processing time before failure: ${((performance.now() - processingStartedAt) / 1000).toFixed(1)} seconds`,
+          `Network diagnostics: ${JSON.stringify(collectNetworkDiagnostics())}`,
           `Browser: ${navigator.userAgent}`,
         ].filter(Boolean).join("\n");
         setDiagnosticDetails(details);
@@ -859,6 +915,24 @@ function CutterTab() {
                     বাতিল করুন
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {successDiagnostics && (
+              <div className="space-y-2 text-[13px] bg-muted/50 border border-border rounded-xl px-3.5 py-3">
+                <div className="flex items-center gap-2 font-semibold text-foreground">
+                  <CheckCircle2 size={16} className="text-success" />
+                  Clip Diagnostics
+                </div>
+                <pre className="whitespace-pre-wrap break-words rounded-lg bg-background/70 p-2 text-[11px] text-foreground">{successDiagnostics}</pre>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { void navigator.clipboard?.writeText(successDiagnostics); }}
+                >
+                  Diagnostics কপি করুন
+                </Button>
               </div>
             )}
 
