@@ -1,6 +1,6 @@
 "use client";
 export const runtime = "edge";
-import { MessageSquareText, Sparkles, Download, ShieldCheck } from "lucide-react";
+import { MessageSquareText, Sparkles, Download, ShieldCheck, Video } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { usePages } from "@/components/providers/pages-provider";
 import { PageSwitcher } from "@/components/page-switcher";
@@ -26,6 +26,9 @@ export default function HomePage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {profile?.role === "super_admin" && (
           <FeatureCard href="/admin" icon={ShieldCheck} title="Admin Panel" desc="কাস্টমার তৈরি, অ্যাক্সেস ও সাবস্ক্রিপশন নিয়ন্ত্রণ করুন" />
+        )}
+        {profile?.role === "super_admin" && (
+          <FeatureCard href="/video-saver" icon={Video} title="Video Saver" desc="ভিডিও লিংক সেভ করুন অথবা ভিডিও ক্লিপ কেটে নিন" />
         )}
         <FeatureCard href="/keywords" icon={MessageSquareText} title="Keyword Reply" desc="নির্দিষ্ট শব্দ কমেন্টে এলে অটো রিপ্লাই পাঠান" />
         <FeatureCard href="/ai" icon={Sparkles} title="AI Reply" desc="Keyword না মিললে AI দিয়ে স্মার্ট রিপ্লাই জেনারেট করুন" />
