@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- 1. SEO Head Setup -->
+    <title>All-in-One Video Downloader | TikTok, Instagram, YouTube & More</title>
+    <meta name="description" content="Download high-quality videos from TikTok, Instagram, YouTube, Facebook, and Twitter for free. Fast, easy, and watermark-free video downloader.">
+    <meta name="keywords" content="video downloader, tiktok downloader, instagram downloader, youtube downloader, download video online, no watermark video">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://yourdomain.com/">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://yourdomain.com/">
+    <meta property="og:title" content="All-in-One Video Downloader">
+    <meta property="og:description" content="Download high-quality videos from TikTok, Instagram, YouTube, Facebook, and Twitter for free.">
+    <meta property="og:image" content="https://yourdomain.com/og-image.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://yourdomain.com/">
+    <meta property="twitter:title" content="All-in-One Video Downloader">
+    <meta property="twitter:description" content="Download high-quality videos from TikTok, Instagram, YouTube, Facebook, and Twitter for free.">
+    <meta property="twitter:image" content="https://yourdomain.com/og-image.jpg">
+
+    <!-- Schema.org JSON-LD -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "All-in-One Video Downloader",
+        "operatingSystem": "Web",
+        "applicationCategory": "MultimediaApplication",
+        "offers": {
+            "@type": "Offer",
+            "price": "0"
+        }
+    }
+    </script>
+
+    <style>
+        /* 2. Base Glassmorphism Styling */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --primary-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            --accent-gradient: linear-gradient(to right, #4776E6, #8E54E9);
+            --text-main: #2d3436;
+            --text-secondary: #636e72;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background: var(--primary-gradient);
+            background-attachment: fixed;
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 850px;
+            width: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        /* 3. Header Section */
+        header {
+            background: rgba(255, 255, 255, 0.3);
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        /* 4. Input Section CSS */
+        .input-section {
+            margin-bottom: 35px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .url-input {
+            padding: 18px 25px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 2px solid var(--glass-border);
+            border-radius: 15px;
+            font-size: 1.05rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-main);
+        }
+
+        .url-input:focus {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: #4776E6;
+            outline: none;
+            box-shadow: 0 0 20px rgba(71, 118, 230, 0.15);
+        }
+
+        .download-btn {
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 15px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            box-shadow: 0 10px 20px rgba(71, 118, 230, 0.2);
+        }
+
+        .download-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 25px rgba(71, 118, 230, 0.3);
+        }
+
+        .download-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .download-btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* 6. Loader & Error CSS */
+        .loader {
+            display: none;
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #4776E6;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: rgba(255, 235, 235, 0.8);
+            border: 1px solid rgba(255, 0, 0, 0.2);
+            color: #d63031;
+            padding: 18px;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        /* 8. Results Section CSS */
+        .results-section {
+            display: none;
+            margin-top: 35px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .video-info {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .video-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .video-author {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .thumbnail-container {
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        /* 12. Thumbnail Download Section CSS */
+        .thumbnail-download-area {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .quality-select {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            outline: none;
+        }
+
+        .thumb-dl-btn {
+            background: #2d3436;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .thumb-dl-btn:hover { background: #000; }
+
+        /* 10. Download Options CSS */
+        .download-options h3 {
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            color: var(--text-main);
+        }
+
+        .media-option {
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .media-option:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: scale(1.01);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .media-quality {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+
+        .media-type {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .download-link {
+            background: var(--accent-gradient);
+            color: white;
+            text-decoration: none;
+            padding: 12px 25px;
+            border-radius: 12px;
+            font-weight: 700;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(71, 118, 230, 0.2);
+        }
+
+        .download-link.downloading {
+            background: #636e72;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        /* 14. Supported Platforms CSS */
+        .supported-platforms {
+            margin-top: 40px;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+        }
+
+        .platforms-title {
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+        .platform-icons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .platform-icon {
+            background: var(--glass-bg);
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-weight: 700;
+            color: var(--text-main);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s;
+        }
+
+        .platform-icon:hover {
+            transform: translateY(-2px);
+            background: white;
+        }
+
+        /* 16. Instructions Section CSS */
+        .instructions {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .step-card {
+            background: rgba(255, 255, 255, 0.4);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            text-align: center;
+        }
+
+        .step-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--accent-gradient);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            color: white;
+        }
+
+        .step-card h4 {
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .step-card p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* 17. Footer CSS + Responsive */
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: white;
+            font-weight: 500;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 15px; }
+            .container { border-radius: 20px; }
+            h1 { font-size: 1.7rem; }
+            .main-content { padding: 20px; }
+            .media-option { flex-direction: column; align-items: stretch; gap: 15px; text-align: center; }
+            .thumbnail-download-area { flex-direction: column; }
+        }
+    </style>
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 3. Header Section -->
+        <header>
+            <h1>All-in-One Video Downloader</h1>
+            <p class="subtitle">Fast, Free & High Quality Video Downloads</p>
+        </header>
+
+        <div class="main-content">
+            <!-- 5. Input Section HTML -->
+            <div class="input-section">
+                <div class="input-group">
+                    <input type="url" class="url-input" id="urlInput" placeholder="Paste link from TikTok, Instagram, YouTube..." required>
+                    <button class="download-btn" id="fetchBtn">
+                        <span>Fetch Video</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 7. Loader & Error HTML -->
+            <div class="loader" id="loader">
+                <div class="spinner"></div>
+                <p style="font-weight: 600; color: #4776E6;">Processing your request...</p>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- 9. Results Section HTML -->
+            <div class="results-section" id="resultsSection">
+                <div class="video-info">
+                    <h2 class="video-title" id="videoTitle"></h2>
+                    <div class="video-author" id="videoAuthor"></div>
+                    <div class="thumbnail-container">
+                        <img class="video-thumbnail" id="videoThumbnail" src="" alt="Thumbnail">
+                    </div>
+                    
+                    <!-- 13. Thumbnail Download Section HTML -->
+                    <div class="thumbnail-download-area" id="thumbArea">
+                        <select class="quality-select" id="thumbQuality">
+                            <option value="maxresdefault">Maximum Quality</option>
+                            <option value="sddefault">Standard Quality</option>
+                            <option value="hqdefault">High Quality</option>
+                            <option value="mqdefault">Medium Quality</option>
+                            <option value="default">Default Quality</option>
+                        </select>
+                        <button class="thumb-dl-btn" id="thumbDlBtn">Download Thumbnail</button>
+                    </div>
+                </div>
+
+                <!-- 11. Download Options HTML -->
+                <div class="download-options">
+                    <h3>Available Downloads</h3>
+                    <div id="downloadOptions"></div>
+                </div>
+            </div>
+
+            <!-- 15. Supported Platforms HTML -->
+            <div class="supported-platforms">
+                <h3 class="platforms-title">Supported Platforms</h3>
+                <div class="platform-icons">
+                    <div class="platform-icon">TikTok</div>
+                    <div class="platform-icon">Instagram</div>
+                    <div class="platform-icon">YouTube</div>
+                    <div class="platform-icon">Facebook</div>
+                    <div class="platform-icon">Twitter / X</div>
+                    <div class="platform-icon">Pinterest</div>
+                </div>
+            </div>
+
+            <!-- 18. 5-Step Instructions HTML -->
+            <div class="instructions">
+                <div class="step-card">
+                    <div class="step-icon">1</div>
+                    <h4>Copy Link</h4>
+                    <p>Find the video you want and copy its shareable URL.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-icon">2</div>
+                    <h4>Paste Link</h4>
+                    <p>Paste the link into the input box above.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-icon">3</div>
+                    <h4>Fetch Video</h4>
+                    <p>Tap the button and wait a few seconds for processing.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-icon">4</div>
+                    <h4>Choose Quality</h4>
+                    <p>Select your preferred format and quality option.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-icon">5</div>
+                    <h4>Download</h4>
+                    <p>Tap Download to save the file directly to your device.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 19. Footer HTML -->
+    <footer>
+        <p>&copy; 2026 All-in-One Video Downloader. All rights reserved.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // 20. JS Setup
+            const urlInput = document.getElementById('urlInput');
+            const fetchBtn = document.getElementById('fetchBtn');
+            const loader = document.getElementById('loader');
+            const errorMessage = document.getElementById('errorMessage');
+            const resultsSection = document.getElementById('resultsSection');
+            const videoTitle = document.getElementById('videoTitle');
+            const videoAuthor = document.getElementById('videoAuthor');
+            const videoThumbnail = document.getElementById('videoThumbnail');
+            const downloadOptions = document.getElementById('downloadOptions');
+            const thumbQuality = document.getElementById('thumbQuality');
+            const thumbDlBtn = document.getElementById('thumbDlBtn');
+            const thumbArea = document.getElementById('thumbArea');
+
+            // API key is stored as a Cloudflare secret and never exposed in this page.
+            const API_URL = '/api/video-downloader';
+
+            // Adsgram Config
+            const AdController = window.Adsgram?.init({ blockId: "21792" });
+
+            // 21. Event Listeners
+            fetchBtn.addEventListener('click', handleFetchAction);
+            urlInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleFetchAction(); });
+
+            // 22. handleFetchAction() with Ad Logic
+            function handleFetchAction() {
+                const url = urlInput.value.trim();
+                if (!url) return showError('Please paste a valid video URL first.');
+
+                if (AdController) {
+                    AdController.show().then(() => fetchVideoInfo()).catch((err) => {
+                        console.warn('Ad error:', err);
+                        fetchVideoInfo();
+                    });
+                } else {
+                    fetchVideoInfo();
+                }
+            }
+
+            // 23. fetchVideoInfo()
+            async function fetchVideoInfo() {
+                const url = urlInput.value.trim();
+                resetUI();
+                showLoader();
+                fetchBtn.disabled = true;
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url: url })
+                    });
+
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.message || 'Failed to fetch video');
+
+                    displayVideoInfo(data);
+                } catch (error) {
+                    showError(error.message || 'Something went wrong. Please try again.');
+                } finally {
+                    hideLoader();
+                    fetchBtn.disabled = false;
+                }
+            }
+
+            // 24 & 25. displayVideoInfo()
+            function displayVideoInfo(data) {
+                videoTitle.textContent = data.title || 'Video Found';
+                videoAuthor.textContent = data.author ? `By ${data.author}` : 'Unknown Creator';
+                videoThumbnail.src = data.thumbnail || '';
+                
+                // 29. Setup Thumbnail Download
+                setupThumbnailDownload(urlInput.value.trim());
+
+                downloadOptions.innerHTML = '';
+                if (data.medias && data.medias.length > 0) {
+                    data.medias.forEach(media => {
+                        const card = document.createElement('div');
+                        card.className = 'media-option';
+                        
+                        const info = document.createElement('div');
+                        const qLabel = formatQuality(media.quality);
+                        const sizeLabel = formatFileSize(media.data_size);
+                        info.innerHTML = `<div class="media-quality">${qLabel}</div>
+                                          <div class="media-type">${media.type.toUpperCase()} • ${media.extension.toUpperCase()} • ${sizeLabel}</div>`;
+                        
+                        const dl = document.createElement('button');
+                        dl.className = 'download-link';
+                        dl.textContent = 'Download';
+                        dl.onclick = () => {
+                            dl.classList.add('downloading');
+                            dl.textContent = 'Starting...';
+                            forceDownload(media.url, `${data.title || 'video'}.${media.extension}`)
+                                .finally(() => {
+                                    dl.classList.remove('downloading');
+                                    dl.textContent = 'Download';
+                                });
+                        };
+
+                        card.appendChild(info);
+                        card.appendChild(dl);
+                        downloadOptions.appendChild(card);
+                    });
+                } else {
+                    downloadOptions.innerHTML = '<p style="text-align:center; padding:20px;">No download options found for this link.</p>';
+                }
+                showResults();
+            }
+
+            // 27. forceDownload() Function
+            async function forceDownload(url, filename) {
+                try {
+                    const res = await fetch(url);
+                    const blob = await res.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                } catch (e) {
+                    window.open(url, '_blank');
+                }
+            }
+
+            // 28. getYouTubeId() Helper
+            function getYouTubeId(url) {
+                const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                const match = url.match(regExp);
+                return (match && match[2].length === 11) ? match[2] : null;
+            }
+
+            // 29. setupThumbnailDownload()
+            function setupThumbnailDownload(url) {
+                const ytId = getYouTubeId(url);
+                if (ytId) {
+                    thumbArea.style.display = 'flex';
+                    thumbDlBtn.onclick = () => {
+                        const quality = thumbQuality.value;
+                        const thumbUrl = `https://img.youtube.com/vi/${ytId}/${quality}.jpg`;
+                        forceDownload(thumbUrl, `youtube_thumbnail_${ytId}.jpg`);
+                    };
+                } else {
+                    thumbArea.style.display = 'none';
+                }
+            }
+
+            // 26 & 30. Helpers
+            function formatQuality(q) {
+                if (!q) return 'Standard';
+                return q.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            }
+
+            function formatFileSize(bytes) {
+                if (!bytes || bytes === 0) return 'Unknown Size';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            function resetUI() { errorMessage.style.display = 'none'; resultsSection.style.display = 'none'; }
+            function showLoader() { loader.style.display = 'block'; }
+            function hideLoader() { loader.style.display = 'none'; }
+            function showError(msg) { errorMessage.textContent = msg; errorMessage.style.display = 'block'; }
+            function showResults() { resultsSection.style.display = 'block'; }
+        });
+    </script>
+</body>
+</html>
