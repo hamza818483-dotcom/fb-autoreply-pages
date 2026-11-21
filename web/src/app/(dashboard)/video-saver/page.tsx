@@ -369,14 +369,23 @@ function CutterTab() {
       await ffmpeg.writeFile(inputName, await fetchFile(sourceFile ?? sourceUrl));
       if (cancelRequested) return;
 
-      // Fast trim using stream copy (no re-encode) for speed/memory; falls back
-      // to re-encode automatically if the container doesn't support copy at
-      // these cut points (ffmpeg will error, which we surface honestly).
+      // Re-encode to a broadly compatible MP4. Stream-copy can fail on
+      // social-platform sources with unusual containers/codecs or cut points.
+      const clipDuration = Math.max(0.1, endSec - startSec);
       await ffmpeg.exec([
-        "-ss", start,
-        "-to", end,
         "-i", inputName,
-        "-c", "copy",
+        "-ss", String(startSec),
+        "-t", String(clipDuration),
+        "-map", "0:v:0",
+        "-map", "0:a?",
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "28",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        "-f", "mp4",
         outputName,
       ]);
       if (cancelRequested) return;
@@ -401,7 +410,7 @@ function CutterTab() {
       if (!cancelRequested) {
         setErrorMsg(
           "ক্লিপ তৈরি করা যায়নি — ফাইল ফরম্যাট/কোডেক সাপোর্টেড নাও হতে পারে, অথবা ডিভাইসে পর্যাপ্ত মেমরি নেই। (" +
-            (e instanceof Error ? e.message : "unknown error") +
+            (e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e) || "unknown error") +
             ")"
         );
       }
