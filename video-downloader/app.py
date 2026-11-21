@@ -73,7 +73,7 @@ def download(url: str = Query(..., min_length=8, max_length=2048)):
                 filename,
                 media_type="video/mp4",
                 filename=f"{safe_name}.mp4",
-                background=None,
+                background=BackgroundTask(lambda: __import__('shutil').rmtree(workdir, ignore_errors=True)),
             )
     except HTTPException:
         raise
