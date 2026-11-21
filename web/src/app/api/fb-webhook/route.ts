@@ -40,11 +40,19 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const bodyText = await request.text();
-  // Ack Meta INSTANTLY, do the matching/reply work in the background. Edge
-  // runtime has no ctx.waitUntil equivalent exposed the same way Workers
-  // does, so we fire-and-forget the promise instead — close enough for
-  // this: Meta only needs the 200 quickly, not the completion.
-  handleFbEvent(bodyText).catch((e) => console.error("[fb-webhook] unhandled:", e?.message));
+  // IMPORTANT: must await this, not fire-and-forget. A fire-and-forget
+  // promise here (started but not awaited before returning the Response)
+  // was getting cut off mid-flight on Cloudflare's Edge runtime — no
+  // ctx.waitUntil() equivalent keeps it alive the way Workers does, so
+  // react/keyword-reply/AI calls inside it were silently never completing
+  // once the response went out. Facebook allows up to ~20s before it
+  // considers the webhook delivery timed out, which comfortably covers the
+  // Graph API + Supabase calls below, so awaiting here is safe.
+  try {
+    await handleFbEvent(bodyText);
+  } catch (e: any) {
+    console.error("[fb-webhook] unhandled:", e?.message);
+  }
   return new Response("EVENT_RECEIVED", { status: 200 });
 }
 
