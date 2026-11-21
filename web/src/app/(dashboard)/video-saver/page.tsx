@@ -2,7 +2,7 @@
 export const runtime = "edge";
 
 import * as React from "react";
-import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input as MediaInput, Mp4OutputFormat, Output, Quality } from "mediabunny";
+import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input as MediaInput, Mp4OutputFormat, Output, Quality, UrlSource } from "mediabunny";
 import {
   Download,
   Scissors,
@@ -507,6 +507,7 @@ function CutterTab() {
   const [duration, setDuration] = React.useState(0);
   const [start, setStart] = React.useState("00:00:00");
   const [end, setEnd] = React.useState("00:00:00");
+  const [cutMode, setCutMode] = React.useState<"smart" | "fast" | "compatible">("smart");
 
   const [loadingCore, setLoadingCore] = React.useState(false);
   const [processing, setProcessing] = React.useState(false);
@@ -604,28 +605,22 @@ function CutterTab() {
     setProgress(0);
     setDiagnosticDetails("");
     let currentStage = "Source video fetch";
-    let sourceBlob: Blob | null = null;
+    let sourceBlob: Blob | null = sourceFile;
     let conversion: Conversion | null = null;
 
     try {
-      if (sourceFile) {
-        sourceBlob = sourceFile;
-      } else {
-        const response = await fetch(sourceUrl);
-        if (!response.ok) {
-          throw new Error(`Source fetch failed: HTTP ${response.status} ${response.statusText}`);
-        }
-        sourceBlob = await response.blob();
-      }
-      if (!sourceBlob || sourceBlob.size === 0) {
-        throw new Error("Fetched source is empty (0 bytes).");
+      if (sourceFile && sourceFile.size === 0) {
+        throw new Error("Selected source file is empty (0 bytes).");
       }
       if (cancelRequestedRef.current) return;
 
-      currentStage = "Mediabunny input initialization";
+      currentStage = "Mediabunny range-aware input initialization";
+      const mediaSource = sourceFile
+        ? new BlobSource(sourceFile)
+        : new UrlSource(sourceUrl, { maxCacheSize: 32 * 1024 * 1024, parallelism: 2 });
       const input = new MediaInput({
         formats: ALL_FORMATS,
-        source: new BlobSource(sourceBlob),
+        source: mediaSource,
       });
       const output = new Output({
         format: new Mp4OutputFormat({ fastStart: "in-memory" }),
@@ -638,9 +633,17 @@ function CutterTab() {
         output,
         tracks: "primary",
         trim: { start: startSec, end: endSec },
-        video: { codec: "avc", quality: new Quality("medium") },
-        audio: { codec: "aac", quality: new Quality("medium") },
-        copy: false,
+        ...(cutMode === "compatible" ? {
+          video: { codec: "avc" as const, quality: new Quality("medium") },
+          audio: { codec: "aac" as const, quality: new Quality("medium") },
+          copy: false as const,
+        } : cutMode === "fast" ? {
+          copy: { mode: "forced" as const, boundaryPolicy: "expand" as const },
+        } : {
+          // Prefer packet-copy only when it can honor the requested boundaries;
+          // otherwise Mediabunny automatically transcodes the selected trim.
+          copy: { mode: "preferred" as const, boundaryPolicy: "shrink" as const, boundaryTolerance: 0 },
+        }),
       });
       conversionRef.current = conversion;
       setLoadingCore(false);
@@ -695,8 +698,9 @@ function CutterTab() {
           e instanceof Error && e.stack ? `Stack: ${e.stack}` : "",
           `Engine: Mediabunny (WebCodecs)`,
           `Source: ${sourceFile ? "uploaded file" : "remote video URL"}`,
-          `Source MIME: ${sourceBlob?.type || "unknown"}`,
-          `Source size: ${sourceBlob ? sourceBlob.size + " bytes" : "not fetched"}`,
+          `Source MIME: ${sourceBlob?.type || (sourceFile ? "unknown" : "remote URL (range-aware source)")}`,
+          `Source size: ${sourceBlob ? sourceBlob.size + " bytes" : "not fully downloaded; UrlSource cache capped at 32 MiB"}`,
+          `Cut mode: ${cutMode}`,
           `Selected clip: ${start} - ${end}`,
           `Browser: ${navigator.userAgent}`,
         ].filter(Boolean).join("\n");
@@ -825,6 +829,16 @@ function CutterTab() {
                 </p>
               </div>
             )}
+
+            <div className="space-y-2 rounded-xl border border-border p-3">
+              <Label>কাটার পদ্ধতি</Label>
+              <select value={cutMode} onChange={(e) => setCutMode(e.target.value as "smart" | "fast" | "compatible")} disabled={processing} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-[13px]">
+                <option value="smart">Smart Cut — recommended (copy possible হলে, না হলে encode)</option>
+                <option value="fast">Fast Cut — stream copy, keyframe অনুযায়ী কাটতে পারে</option>
+                <option value="compatible">Compatible Cut — selected অংশ re-encode</option>
+              </select>
+              <p className="text-xs text-muted-foreground">Remote video-তে range request ও সর্বোচ্চ 32 MiB source cache ব্যবহার হবে। Fast Cut-এ keyframe-এর কারণে start/end সামান্য বদলাতে পারে।</p>
+            </div>
 
             {!processing ? (
               <Button type="button" className="w-full" onClick={handleCutAndSave} disabled={!duration}>
