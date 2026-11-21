@@ -70,15 +70,15 @@ export function PagesSection() {
         <div className="mb-4 space-y-2.5">
           {pages.map((p) => (
             <Card key={p.page_id}>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-[15px] truncate">{p.page_name || p.page_id}</p>
                   <p className="text-[12px] text-muted-foreground truncate">Page ID: {p.page_id}</p>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => startEdit(p.page_id)}>
+                <Button variant="secondary" size="sm" onClick={() => startEdit(p.page_id)} className="shrink-0 whitespace-nowrap">
                   <Pencil size={14} /> টোকেন আপডেট
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => removePage(p.page_id)}>
+                <Button variant="secondary" size="sm" onClick={() => removePage(p.page_id)} className="shrink-0">
                   <Trash2 size={14} />
                 </Button>
               </div>
@@ -114,11 +114,11 @@ export function PagesSection() {
       )}
 
       <Card>
-        <div className="flex items-center gap-2.5 mb-0">
-          <h2 className="flex-1 font-bold text-[15px] flex items-center gap-1.5">
-            <Webhook size={16} className="text-primary" /> Facebook Page যোগ করুন
+        <div className="flex items-center gap-2.5 mb-0 flex-wrap">
+          <h2 className="flex-1 min-w-0 font-bold text-[15px] flex items-center gap-1.5 truncate">
+            <Webhook size={16} className="text-primary shrink-0" /> Facebook Page যোগ করুন
           </h2>
-          <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
+          <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)} className="shrink-0 whitespace-nowrap">
             + নতুন পেজ
           </Button>
         </div>
