@@ -248,7 +248,6 @@ function SaverTab() {
   const [url, setUrl] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState("");
-  const [diagnosticDetails, setDiagnosticDetails] = React.useState("");
   const [result, setResult] = React.useState<DownloaderResult | null>(null);
   const [downloadingIdx, setDownloadingIdx] = React.useState<number | null>(null);
   const [thumbQuality, setThumbQuality] = React.useState("maxresdefault");
@@ -516,6 +515,7 @@ function CutterTab() {
   const [resultUrl, setResultUrl] = React.useState<string | null>(null);
   const [resultBlob, setResultBlob] = React.useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
+  const [diagnosticDetails, setDiagnosticDetails] = React.useState("");
   const [sizeWarning, setSizeWarning] = React.useState("");
   const [history, setHistory] = React.useState<HistoryItem[]>([]);
 
