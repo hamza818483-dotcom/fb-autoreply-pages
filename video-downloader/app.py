@@ -5,12 +5,12 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query\nfrom fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 from yt_dlp import YoutubeDL
 
-app = FastAPI(title="Authorized Public Video Downloader")
+app = FastAPI(title="Authorized Public Video Downloader")\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=os.getenv("WEB_ORIGINS", "*").split(","),\n    allow_methods=["GET"],\n    allow_headers=["*"],\n)
 
 ALLOWED_HOSTS = {
     "facebook.com", "www.facebook.com", "fb.watch", "m.facebook.com",
