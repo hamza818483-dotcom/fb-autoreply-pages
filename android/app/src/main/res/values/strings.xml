@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">FB AutoReply</string>
+    <string name="dashboard_url">https://fb-autoreply-pages.pages.dev</string>
+
+    <string name="error_no_internet">Internet connection নেই। আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন।</string>
+    <string name="error_load_failed">Dashboard লোড করা যায়নি।</string>
+    <string name="retry">আবার চেষ্টা করুন</string>
+    <string name="exit_title">অ্যাপ বন্ধ করবেন?</string>
+    <string name="exit_message">আপনি কি নিশ্চিত যে অ্যাপ থেকে বের হতে চান?</string>
+    <string name="yes">হ্যাঁ</string>
+    <string name="cancel">বাতিল</string>
+</resources>
