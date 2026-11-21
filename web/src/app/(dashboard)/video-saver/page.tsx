@@ -288,14 +288,17 @@ function CutterTab() {
       setErrorMsg("সঠিক ভিডিও URL দিন।");
       return;
     }
-    if (detectPlatform(remoteUrl) !== "direct") {
-      setErrorMsg("শুধুমাত্র ডাইরেক্ট ভিডিও ফাইল লিংক (.mp4 ইত্যাদি) সাপোর্ট করা হয়।");
+    const platform = detectPlatform(remoteUrl);
+    if (!["direct", "facebook", "youtube", "instagram", "tiktok"].includes(platform)) {
+      setErrorMsg("এই লিংকটি supported নয়। Facebook, YouTube, Instagram, TikTok অথবা direct MP4 URL দিন।");
       return;
     }
     setErrorMsg("");
     setSourceFile(null);
-    setSourceUrl(remoteUrl);
     resetForNewSource();
+    setSourceUrl(platform === "direct"
+      ? remoteUrl.trim()
+      : `/api/video-downloader/media?url=${encodeURIComponent(remoteUrl.trim())}`);
   }
 
   function onLoadedMetadata() {
@@ -436,7 +439,7 @@ function CutterTab() {
       <Card>
         <CardHeader>
           <CardTitle>ভিডিও লোড করুন</CardTitle>
-          <CardDescription>ফাইল আপলোড করুন অথবা ডাইরেক্ট ভিডিও URL দিন</CardDescription>
+          <CardDescription>ভিডিও ফাইল আপলোড করুন অথবা Facebook/YouTube/Instagram/TikTok/direct video link দিন</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
@@ -457,7 +460,7 @@ function CutterTab() {
             <Input
               value={remoteUrl}
               onChange={(e) => setRemoteUrl(e.target.value)}
-              placeholder="ডাইরেক্ট ভিডিও URL (.mp4)..."
+              placeholder="Facebook / YouTube / MP4 ভিডিও লিংক..."
               className="flex-1"
             />
             <Button type="button" variant="secondary" onClick={handleLoadRemote}>
