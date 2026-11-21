@@ -2,7 +2,7 @@
 export const runtime = "edge";
 
 import * as React from "react";
-import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output, Quality } from "mediabunny";
+import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input as MediaInput, Mp4OutputFormat, Output, Quality } from "mediabunny";
 import {
   Download,
   Scissors,
@@ -623,7 +623,7 @@ function CutterTab() {
       if (cancelRequestedRef.current) return;
 
       currentStage = "Mediabunny input initialization";
-      const input = new Input({
+      const input = new MediaInput({
         formats: ALL_FORMATS,
         source: new BlobSource(sourceBlob),
       });
