@@ -511,7 +511,7 @@ function CutterTab() {
   const [loadingCore, setLoadingCore] = React.useState(false);
   const [processing, setProcessing] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
-  const [cancelRequested, setCancelRequested] = React.useState(false);
+  const cancelRequestedRef = React.useRef(false);
   const [resultUrl, setResultUrl] = React.useState<string | null>(null);
   const [resultBlob, setResultBlob] = React.useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
@@ -598,7 +598,7 @@ function CutterTab() {
       return;
     }
 
-    setCancelRequested(false);
+    cancelRequestedRef.current = false;
     setProcessing(true);
     setLoadingCore(true);
     setProgress(0);
@@ -620,7 +620,7 @@ function CutterTab() {
       if (!sourceBlob || sourceBlob.size === 0) {
         throw new Error("Fetched source is empty (0 bytes).");
       }
-      if (cancelRequested) return;
+      if (cancelRequestedRef.current) return;
 
       currentStage = "Mediabunny input initialization";
       const input = new Input({
@@ -649,7 +649,7 @@ function CutterTab() {
         const discarded = conversion.discardedTracks.map((item) => item.reason).join(", ");
         throw new Error(`No valid output track configuration. Discarded tracks: ${discarded || "unknown"}`);
       }
-      if (cancelRequested) {
+      if (cancelRequestedRef.current) {
         await conversion.cancel();
         return;
       }
@@ -684,7 +684,7 @@ function CutterTab() {
       });
       setHistory(h);
     } catch (e) {
-      if (!cancelRequested) {
+      if (!cancelRequestedRef.current) {
         const errorText =
           e instanceof Error ? `${e.name}: ${e.message}` :
           typeof e === "string" ? e :
@@ -711,7 +711,7 @@ function CutterTab() {
   }
 
   function handleCancel() {
-    setCancelRequested(true);
+    cancelRequestedRef.current = true;
     setProgress(0);
     void conversionRef.current?.cancel().catch(() => {
       // The conversion may already have completed or been canceled.
