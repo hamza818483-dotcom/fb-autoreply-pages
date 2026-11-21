@@ -53,16 +53,29 @@ export async function GET(request: Request) {
     const mediaUrl = candidates[0]?.url;
     if (!mediaUrl) return error("এই লিংকের জন্য downloadable video পাওয়া যায়নি।", 404);
 
-    const media = await fetch(mediaUrl);
-    if (!media.ok || !media.body) return error("Video file could not be fetched. Try another link.", 502);
+    // Pass byte-range requests through so Mediabunny UrlSource can fetch only
+    // the MP4 metadata and selected media packets instead of buffering the file.
+    const range = request.headers.get("Range");
+    const upstreamHeaders = new Headers();
+    if (range && /^bytes=\d*-\d*(,\d*-\d*)*$/.test(range)) {
+      upstreamHeaders.set("Range", range);
+      const ifRange = request.headers.get("If-Range");
+      if (ifRange) upstreamHeaders.set("If-Range", ifRange);
+    }
+    const media = await fetch(mediaUrl, { headers: upstreamHeaders });
+    if (!(media.ok || media.status === 206) || !media.body) {
+      return error(`Video file could not be fetched (upstream HTTP ${media.status}). Try another link.`, 502);
+    }
     const headers = new Headers();
     headers.set("Content-Type", media.headers.get("Content-Type") || "video/mp4");
     headers.set("Cache-Control", "no-store");
     headers.set("Content-Disposition", 'inline; filename="source-video.mp4"');
-    const length = media.headers.get("Content-Length");
-    if (length) headers.set("Content-Length", length);
-    headers.set("Accept-Ranges", "none");
-    return new Response(media.body, { status: 200, headers });
+    for (const name of ["Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
+      const value = media.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    // Preserve 206 only when the upstream actually honored the range.
+    return new Response(media.body, { status: media.status, headers });
   } catch {
     return error("Could not fetch this video. It may be private, unavailable, or blocked by the provider.", 502);
   }
