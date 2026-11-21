@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package && node scripts/copy-ffmpeg-worker.cjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
