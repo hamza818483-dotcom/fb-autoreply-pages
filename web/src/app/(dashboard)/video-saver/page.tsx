@@ -41,6 +41,14 @@ declare global {
   }
 }
 
+const VIDEO_DOWNLOADER_API = process.env.NEXT_PUBLIC_VIDEO_DOWNLOADER_URL?.replace(/\\/$/, "");
+
+function getDownloadUrl(sourceUrl: string): string {
+  if (detectPlatform(sourceUrl) === "direct") return sourceUrl;
+  if (!VIDEO_DOWNLOADER_API) throw new Error("Backend সেটআপ করা হয়নি। NEXT_PUBLIC_VIDEO_DOWNLOADER_URL configure করুন।");
+  return `${VIDEO_DOWNLOADER_API}/download?url=${encodeURIComponent(sourceUrl)}`;
+}
+
 function isAndroidAppWebView(): boolean {
   return typeof window !== "undefined" && !!window.AndroidVideoSaver;
 }
@@ -211,7 +219,7 @@ function SaverTab() {
     setErrorMsg("");
   }
 
-  function handleProcess() {
+  async function handleProcess() {
     setErrorMsg("");
     if (!isValidUrl(url)) {
       setStatus("error");
@@ -219,30 +227,37 @@ function SaverTab() {
       return;
     }
     setStatus("checking");
-    window.setTimeout(() => {
-      const p = detectPlatform(url);
-      if (p === "direct") {
+    const p = detectPlatform(url);
+    if (p === "direct" || (VIDEO_DOWNLOADER_API && ["facebook", "youtube", "instagram", "tiktok"].includes(p))) {
+      try {
+        if (p !== "direct") {
+          const health = await fetch(`${VIDEO_DOWNLOADER_API}/health`, { cache: "no-store" });
+          if (!health.ok) throw new Error("Downloader backend unavailable");
+        }
         setStatus("ready");
         const h = pushHistory(SAVER_HISTORY_KEY, {
           id: crypto.randomUUID(),
-          name: url.split("/").pop() || url,
+          name: url,
           platform: p,
           status: "ready",
           at: Date.now(),
         });
         setHistory(h);
-      } else {
-        setStatus("unsupported");
-        const h = pushHistory(SAVER_HISTORY_KEY, {
-          id: crypto.randomUUID(),
-          name: url,
-          platform: p,
-          status: "unsupported",
-          at: Date.now(),
-        });
-        setHistory(h);
+      } catch {
+        setStatus("error");
+        setErrorMsg("Downloader backend-এ সংযোগ করা যায়নি। Backend URL ও deployment চেক করুন।");
       }
-    }, 400);
+    } else {
+      setStatus("unsupported");
+      const h = pushHistory(SAVER_HISTORY_KEY, {
+        id: crypto.randomUUID(),
+        name: url,
+        platform: p,
+        status: "unsupported",
+        at: Date.now(),
+      });
+      setHistory(h);
+    }
   }
 
   function clearHistory() {
@@ -255,7 +270,7 @@ function SaverTab() {
       <Card>
         <CardHeader>
           <CardTitle>লিংক পেস্ট করুন</CardTitle>
-          <CardDescription>ডাইরেক্ট ভিডিও ফাইল URL (.mp4, .webm, .mov, .m4v)</CardDescription>
+          <CardDescription>Facebook/YouTube সহ supported public link অথবা direct video file URL</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-2">
@@ -299,8 +314,7 @@ function SaverTab() {
             <div className="flex items-start gap-2 text-[13px] text-warning bg-warning/10 border border-warning/20 rounded-xl px-3.5 py-3">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <span>
-                {meta.label}-এর লিংক থেকে সরাসরি ডাউনলোড সাপোর্ট করা হয় না (প্ল্যাটফর্মের access restriction এড়ানো সম্ভব না)।
-                শুধুমাত্র ডাইরেক্ট ভিডিও ফাইল লিংক (.mp4 ইত্যাদি) অথবা অনুমোদিত API সোর্স সাপোর্ট করা হয়।
+                {meta.label}-এর লিংক ডাউনলোড করতে Backend প্রয়োজন। Backend সেটআপ না থাকলে direct video URL ব্যবহার করুন।
               </span>
             </div>
           )}
@@ -309,18 +323,19 @@ function SaverTab() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[13px] text-success bg-success/10 border border-success/20 rounded-xl px-3.5 py-3">
                 <CheckCircle2 size={16} />
-                <span>ডাইরেক্ট ভিডিও লিংক শনাক্ত হয়েছে। ডাউনলোড শুরু করুন।</span>
+                <span>লিংক প্রস্তুত। ডাউনলোড শুরু করুন।</span>
               </div>
               <Button
                 type="button"
                 variant="secondary"
                 className="w-full"
                 onClick={() => {
-                  const fileName = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() || "video");
-                  if (!saveVideoFromUrl(url, fileName)) {
+                  const fileName = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() || "video.mp4");
+                  const downloadUrl = getDownloadUrl(url);
+                  if (!saveVideoFromUrl(downloadUrl, fileName)) {
                     // Not inside the Android app — normal browser download.
                     const a = document.createElement("a");
-                    a.href = url;
+                    a.href = downloadUrl;
                     a.download = fileName;
                     a.rel = "noopener noreferrer";
                     a.target = "_blank";
