@@ -86,11 +86,9 @@ async function handleFbEvent(bodyText: string) {
 
           const dlog = await Debug.start(webhookPageId, `Comment: "${message}"\nID: ${commentId}`);
 
-          const reactResult = await reactToComment(commentId, pageConfig.page_access_token);
+          const reactResult = await reactToComment(commentId, pageConfig.page_access_token, dlog);
           if (!reactResult || reactResult.error) {
-            await dlog.add(`❌ Love-react FAILED\n${JSON.stringify(reactResult)}`);
-          } else {
-            await dlog.add(`✅ Reacted`);
+            await dlog.add(`❌ React FAILED\n${JSON.stringify(reactResult)}`);
           }
 
           const match = await matchKeyword(message, webhookPageId);
@@ -336,7 +334,12 @@ async function markReplied(commentId: string) {
   }
 }
 
-async function reactToComment(commentId: string, pageAccessToken: string): Promise<any> {
+async function reactToComment(
+  commentId: string,
+  pageAccessToken: string,
+  dlog?: { add: (line: string) => Promise<void> }
+): Promise<any> {
+  const log = dlog || { add: async () => {} };
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
     // Try LOVE reaction first via the reactions edge (supports type=LOVE).
@@ -348,17 +351,24 @@ async function reactToComment(commentId: string, pageAccessToken: string): Promi
     );
     const data = await res.json();
     if (!res.ok) {
+      await log.add(`⚠️ LOVE react failed (HTTP ${res.status}): ${JSON.stringify(data).slice(0, 300)}\nFalling back to plain like...`);
       console.error("[fb-webhook] LOVE react failed, falling back to like:", JSON.stringify(data));
       const fallback = await fetch(`${GRAPH}/${commentId}/likes?access_token=${encodeURIComponent(token || "")}`, {
         method: "POST",
         signal: AbortSignal.timeout(15000),
       });
       const fbData = await fallback.json();
-      if (!fallback.ok) console.error("[fb-webhook] like fallback also failed:", JSON.stringify(fbData));
+      if (!fallback.ok) {
+        console.error("[fb-webhook] like fallback also failed:", JSON.stringify(fbData));
+      } else {
+        await log.add(`✅ Fallback LIKE succeeded (LOVE was rejected)`);
+      }
       return fbData;
     }
+    await log.add(`✅ LOVE reaction succeeded`);
     return data;
   } catch (e: any) {
+    await log.add(`❌ reactToComment exception: ${e.message}`);
     console.error("[fb-webhook] reactToComment error:", e.message);
   }
 }
