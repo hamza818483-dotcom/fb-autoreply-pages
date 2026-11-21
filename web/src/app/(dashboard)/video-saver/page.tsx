@@ -659,7 +659,7 @@ function CutterTab() {
         setProgress(Math.min(99, Math.max(0, Math.round(value * 100))));
       };
       await conversion.execute();
-      if (cancelRequested) return;
+      if (cancelRequestedRef.current) return;
 
       currentStage = "Reading completed MP4 output";
       const buffer = output.target.buffer;
