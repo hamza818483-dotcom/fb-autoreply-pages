@@ -30,10 +30,17 @@ function extractQuotaHeaders(h: Headers): Record<string, string> {
  * it gets its own request builder + response normalizer to still
  * return the same DownloaderResult shape the frontend expects.
  *
- * Env vars (comma-separated for multiple keys on one provider):
- *   RAPIDAPI_KEY           -> social-download-all-in-one.p.rapidapi.com
- *   RAPIDAPI_KEY_ZM        -> zm-api.p.rapidapi.com
- *   RAPIDAPI_KEY_AIOSAVER  -> all-in-one-social-media-saver-api.p.rapidapi.com
+ * Env vars (comma-separated for multiple keys on one provider).
+ * RAPIDAPI_KEY is the shared default: since keys from the same
+ * RapidAPI account are identical across APIs, you normally only need
+ * to set this one var and every provider below uses it. Only set a
+ * provider-specific var (e.g. when that provider comes from a
+ * different RapidAPI account/email) to override the default for that
+ * provider alone:
+ *   RAPIDAPI_KEY            -> default key(s), used by any provider below with no override
+ *   RAPIDAPI_KEY_PRIMARY    -> overrides for social-download-all-in-one.p.rapidapi.com
+ *   RAPIDAPI_KEY_ZM         -> overrides for zm-api.p.rapidapi.com
+ *   RAPIDAPI_KEY_AIOSAVER   -> overrides for all-in-one-social-media-saver-api.p.rapidapi.com
  */
 type DownloaderMedia = { url: string; quality?: string; extension?: string; type?: string };
 type NormalizedResult = { url?: string; source?: string; author?: string; title?: string; thumbnail?: string; duration?: number; medias: DownloaderMedia[]; type?: string; error: boolean; message?: string };
@@ -112,12 +119,18 @@ function normalizeAiosaver(data: unknown): NormalizedResult {
 }
 
 function getProviders(): ProviderConfig[] {
+  const defaultKeys = parseKeys(process.env.RAPIDAPI_KEY);
+  const keysFor = (overrideEnv: string | undefined) => {
+    const override = parseKeys(overrideEnv);
+    return override.length > 0 ? override : defaultKeys;
+  };
+
   const providers: ProviderConfig[] = [];
-  const primaryKeys = parseKeys(process.env.RAPIDAPI_KEY);
+  const primaryKeys = keysFor(process.env.RAPIDAPI_KEY_PRIMARY);
   if (primaryKeys.length > 0) providers.push({ host: "social-download-all-in-one.p.rapidapi.com", keys: primaryKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
-  const zmKeys = parseKeys(process.env.RAPIDAPI_KEY_ZM);
+  const zmKeys = keysFor(process.env.RAPIDAPI_KEY_ZM);
   if (zmKeys.length > 0) providers.push({ host: "zm-api.p.rapidapi.com", keys: zmKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
-  const aiosaverKeys = parseKeys(process.env.RAPIDAPI_KEY_AIOSAVER);
+  const aiosaverKeys = keysFor(process.env.RAPIDAPI_KEY_AIOSAVER);
   if (aiosaverKeys.length > 0) providers.push({ host: "all-in-one-social-media-saver-api.p.rapidapi.com", keys: aiosaverKeys, buildRequest: buildAiosaverRequest, normalize: normalizeAiosaver });
   return providers;
 }
