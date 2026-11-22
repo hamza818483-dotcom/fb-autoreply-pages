@@ -571,6 +571,8 @@ function CutterTab() {
   const [processing, setProcessing] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
   const cancelRequestedRef = React.useRef(false);
+  const [loadingRemote, setLoadingRemote] = React.useState(false);
+  const lastLoadedRemoteUrl = React.useRef<string | null>(null);
   const [resultUrl, setResultUrl] = React.useState<string | null>(null);
   const [resultBlob, setResultBlob] = React.useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = React.useState("");
@@ -605,27 +607,35 @@ function CutterTab() {
     }
     setSourceFile(file);
     setRemoteUrl("");
+    lastLoadedRemoteUrl.current = null;
     const url = URL.createObjectURL(file);
     setSourceUrl(url);
     resetForNewSource();
   }
 
   async function handleLoadRemote() {
+    if (loadingRemote) return; // ignore repeat clicks while a load is already in flight
     if (!isValidUrl(remoteUrl)) {
       setErrorMsg("সঠিক ভিডিও URL দিন।");
       return;
     }
-    const platform = detectPlatform(remoteUrl);
+    const trimmedUrl = remoteUrl.trim();
+    // Same link already loaded — don't re-trigger (avoids accidental duplicate API calls).
+    if (lastLoadedRemoteUrl.current === trimmedUrl && sourceUrl) return;
+    const platform = detectPlatform(trimmedUrl);
     if (!["direct", "facebook", "youtube", "instagram", "tiktok"].includes(platform)) {
-      setErrorMsg("এই লিংকটি supported নয়। Facebook, YouTube, Instagram, TikTok অথবা direct MP4 URL দিন।");
+      setErrorMsg("এই লিংকটি supported নয়। Facebook, YouTube, Instagram, TikTok অথবা direct MP4 URL দিন।");
       return;
     }
+    setLoadingRemote(true);
     setErrorMsg("");
     setSourceFile(null);
     resetForNewSource();
+    lastLoadedRemoteUrl.current = trimmedUrl;
     setSourceUrl(platform === "direct"
-      ? remoteUrl.trim()
-      : `/api/video-downloader/media?url=${encodeURIComponent(remoteUrl.trim())}`);
+      ? trimmedUrl
+      : `/api/video-downloader/media?url=${encodeURIComponent(trimmedUrl)}`);
+    setLoadingRemote(false);
   }
 
   function onLoadedMetadata() {
@@ -875,8 +885,8 @@ function CutterTab() {
               placeholder="Facebook / YouTube / MP4 ভিডিও লিংক..."
               className="flex-1 min-w-0"
             />
-            <Button type="button" variant="secondary" onClick={handleLoadRemote} className="shrink-0">
-              লোড করুন
+            <Button type="button" variant="secondary" onClick={handleLoadRemote} disabled={loadingRemote} className="shrink-0">
+              {loadingRemote ? "লোড হচ্ছে..." : "লোড করুন"}
             </Button>
           </div>
 
