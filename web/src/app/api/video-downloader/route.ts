@@ -16,32 +16,33 @@ function extractQuotaHeaders(h: Headers): Record<string, string> {
 }
 
 /**
- * Three RapidAPI providers, tried in order as a fallback chain.
+ * RapidAPI providers, tried in order as a fallback chain.
  * Each is a SEPARATE API subscription under the same account, so each
  * has its own independent monthly quota (confirmed via the account's
  * Subscriptions & Usage page: each API shows its own % usage, not a
  * shared/pooled number) — unlike multiple keys on the SAME API, which
  * do share one quota.
  *
- * Providers 1 & 2 share the same request/response shape
- * (/v1/social/autolink, { url }, { medias: [...] }). Provider 3 has a
- * different endpoint, request body and (unconfirmed, provider was
- * returning "API unreachable" at integration time) response shape, so
- * it gets its own request builder + response normalizer to still
- * return the same DownloaderResult shape the frontend expects.
+ * Hosts now come from a single env var, so adding/removing/reordering
+ * providers is a Vercel env var edit only — no code change needed:
  *
- * Env vars (comma-separated for multiple keys on one provider).
- * RAPIDAPI_KEY is the shared default: since keys from the same
- * RapidAPI account are identical across APIs, you normally only need
- * to set this one var and every provider below uses it. Only set a
- * provider-specific var (e.g. when that provider comes from a
- * different RapidAPI account/email) to override the default for that
- * provider alone:
- *   RAPIDAPI_KEY            -> default key(s), used by any provider below with no override
- *   RAPIDAPI_KEY_PRIMARY    -> overrides for social-download-all-in-one.p.rapidapi.com
- *   RAPIDAPI_KEY_ZM         -> overrides for zm-api.p.rapidapi.com
- *   RAPIDAPI_KEY_AIOSAVER   -> overrides for all-in-one-social-media-saver-api.p.rapidapi.com
- *   RAPIDAPI_KEY_ELITE      -> overrides for download-all-in-one-elite.p.rapidapi.com
+ *   RAPIDAPI_HOSTS  -> comma-separated list of RapidAPI hosts, tried
+ *                      in the order given, e.g.:
+ *                      social-download-all-in-one.p.rapidapi.com,zm-api.p.rapidapi.com
+ *   RAPIDAPI_KEY    -> the shared key, used for every host in RAPIDAPI_HOSTS
+ *                      (comma-separated if you want multiple keys tried per host)
+ *
+ * All hosts above use the same /v1/social/autolink request/response
+ * shape. The one known exception is
+ * all-in-one-social-media-saver-api.p.rapidapi.com, which has a
+ * different endpoint/body and an unconfirmed response shape — it is
+ * auto-detected by hostname below and gets its own request builder +
+ * defensive normalizer so the frontend still gets the same shape.
+ *
+ * Legacy per-provider override vars (RAPIDAPI_KEY_PRIMARY,
+ * RAPIDAPI_KEY_ZM, RAPIDAPI_KEY_AIOSAVER, RAPIDAPI_KEY_ELITE) are no
+ * longer read — only RAPIDAPI_KEY matters now, since the key is the
+ * same across hosts on this account.
  */
 type DownloaderMedia = { url: string; quality?: string; extension?: string; type?: string };
 type NormalizedResult = { url?: string; source?: string; author?: string; title?: string; thumbnail?: string; duration?: number; medias: DownloaderMedia[]; type?: string; error: boolean; message?: string };
@@ -119,28 +120,26 @@ function normalizeAiosaver(data: unknown): NormalizedResult {
   };
 }
 
-function getProviders(): ProviderConfig[] {
-  const defaultKeys = parseKeys(process.env.RAPIDAPI_KEY);
-  const keysFor = (overrideEnv: string | undefined) => {
-    const override = parseKeys(overrideEnv);
-    return override.length > 0 ? override : defaultKeys;
-  };
+// Hosts whose API has a different request/body/response shape than the
+// default /v1/social/autolink one. Add a hostname here only if it needs
+// special-casing; everything else uses the default autolink shape.
+const SPECIAL_PROVIDERS: Record<string, { buildRequest: (u: string) => { path: string; body: unknown }; normalize: (d: unknown) => NormalizedResult }> = {
+  "all-in-one-social-media-saver-api.p.rapidapi.com": { buildRequest: buildAiosaverRequest, normalize: normalizeAiosaver },
+};
 
-  const providers: ProviderConfig[] = [];
-  const primaryKeys = keysFor(process.env.RAPIDAPI_KEY_PRIMARY);
-  if (primaryKeys.length > 0) providers.push({ host: "social-download-all-in-one.p.rapidapi.com", keys: primaryKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
-  const zmKeys = keysFor(process.env.RAPIDAPI_KEY_ZM);
-  if (zmKeys.length > 0) providers.push({ host: "zm-api.p.rapidapi.com", keys: zmKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
-  const aiosaverKeys = keysFor(process.env.RAPIDAPI_KEY_AIOSAVER);
-  if (aiosaverKeys.length > 0) providers.push({ host: "all-in-one-social-media-saver-api.p.rapidapi.com", keys: aiosaverKeys, buildRequest: buildAiosaverRequest, normalize: normalizeAiosaver });
-  const eliteKeys = keysFor(process.env.RAPIDAPI_KEY_ELITE);
-  if (eliteKeys.length > 0) providers.push({ host: "download-all-in-one-elite.p.rapidapi.com", keys: eliteKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
-  return providers;
+function getProviders(): ProviderConfig[] {
+  const hosts = parseKeys(process.env.RAPIDAPI_HOSTS);
+  const keys = parseKeys(process.env.RAPIDAPI_KEY);
+  if (hosts.length === 0 || keys.length === 0) return [];
+  return hosts.map((host) => {
+    const special = SPECIAL_PROVIDERS[host];
+    return { host, keys, buildRequest: special?.buildRequest ?? buildAutolinkRequest, normalize: special?.normalize ?? normalizeAutolink };
+  });
 }
 
 export async function POST(request: Request) {
   const providers = getProviders();
-  if (providers.length === 0) return json({ error: true, message: "Server configuration missing: RAPIDAPI_KEY" }, 500);
+  if (providers.length === 0) return json({ error: true, message: "Server configuration missing: RAPIDAPI_HOSTS or RAPIDAPI_KEY" }, 500);
 
   let body: { url?: unknown };
   try { body = await request.json(); } catch { return json({ error: true, message: "Invalid JSON request." }, 400); }
