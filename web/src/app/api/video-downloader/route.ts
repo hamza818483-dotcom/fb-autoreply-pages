@@ -41,6 +41,7 @@ function extractQuotaHeaders(h: Headers): Record<string, string> {
  *   RAPIDAPI_KEY_PRIMARY    -> overrides for social-download-all-in-one.p.rapidapi.com
  *   RAPIDAPI_KEY_ZM         -> overrides for zm-api.p.rapidapi.com
  *   RAPIDAPI_KEY_AIOSAVER   -> overrides for all-in-one-social-media-saver-api.p.rapidapi.com
+ *   RAPIDAPI_KEY_ELITE      -> overrides for download-all-in-one-elite.p.rapidapi.com
  */
 type DownloaderMedia = { url: string; quality?: string; extension?: string; type?: string };
 type NormalizedResult = { url?: string; source?: string; author?: string; title?: string; thumbnail?: string; duration?: number; medias: DownloaderMedia[]; type?: string; error: boolean; message?: string };
@@ -132,6 +133,8 @@ function getProviders(): ProviderConfig[] {
   if (zmKeys.length > 0) providers.push({ host: "zm-api.p.rapidapi.com", keys: zmKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
   const aiosaverKeys = keysFor(process.env.RAPIDAPI_KEY_AIOSAVER);
   if (aiosaverKeys.length > 0) providers.push({ host: "all-in-one-social-media-saver-api.p.rapidapi.com", keys: aiosaverKeys, buildRequest: buildAiosaverRequest, normalize: normalizeAiosaver });
+  const eliteKeys = keysFor(process.env.RAPIDAPI_KEY_ELITE);
+  if (eliteKeys.length > 0) providers.push({ host: "download-all-in-one-elite.p.rapidapi.com", keys: eliteKeys, buildRequest: buildAutolinkRequest, normalize: normalizeAutolink });
   return providers;
 }
 
