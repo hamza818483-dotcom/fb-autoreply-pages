@@ -21,22 +21,64 @@ function parseList(raw: string | undefined): string[] {
   return (raw || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-// In-memory cache so the browser's many Range requests for the SAME source
-// link (seeking/buffering in the cutter's <video> element) trigger only ONE
-// /v1/social/autolink lookup against RapidAPI instead of one per range
-// request. Edge runtime instances are short-lived and not shared across
-// regions/requests globally, so this is best-effort dedup (works within the
-// same warm instance), not a hard guarantee — but it removes the common case
-// of a single page load burning many quota units. TTL avoids serving a stale
-// resolved URL if the upstream media link expires.
+// Minimal KV binding shape (avoids pulling in @cloudflare/workers-types just
+// for this). Present only when VIDEO_CACHE is bound in Cloudflare Pages
+// (Settings -> Functions -> KV namespace bindings). Falls back to an
+// in-memory cache (best-effort within one warm edge instance) if unbound,
+// so this still works before/without the KV binding being configured.
+type KVLike = {
+  get: (key: string, type?: "text") => Promise<string | null>;
+  put: (key: string, value: string, opts?: { expirationTtl?: number }) => Promise<void>;
+};
+
+function getKv(): KVLike | null {
+  // @cloudflare/next-on-pages (used in this project, see layout.tsx) exposes
+  // bound resources like KV namespaces through process.env, the same way it
+  // already exposes RAPIDAPI_KEY/RAPIDAPI_HOSTS above — so this mirrors that.
+  const kv = (process.env as unknown as Record<string, unknown>).VIDEO_CACHE as KVLike | undefined;
+  return kv && typeof kv.get === "function" && typeof kv.put === "function" ? kv : null;
+}
+
+// In-memory fallback, used when KV isn't bound (or as a fast first check
+// before hitting KV) — same role as before, just now backed by KV too.
 const MEDIA_URL_CACHE = new Map<string, { url: string; at: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — long enough for one edit session
+const CACHE_TTL_SEC = 300;
 
-function getCachedMediaUrl(source: string): string | null {
+function cacheKey(source: string): string {
+  return `media-url:${source}`;
+}
+
+function getMemCached(source: string): string | null {
   const hit = MEDIA_URL_CACHE.get(source);
   if (!hit) return null;
   if (Date.now() - hit.at > CACHE_TTL_MS) { MEDIA_URL_CACHE.delete(source); return null; }
   return hit.url;
+}
+
+async function getCachedMediaUrl(source: string): Promise<string | null> {
+  const mem = getMemCached(source);
+  if (mem) return mem;
+  const kv = getKv();
+  if (!kv) return null;
+  try {
+    const stored = await kv.get(cacheKey(source), "text");
+    if (stored) { MEDIA_URL_CACHE.set(source, { url: stored, at: Date.now() }); return stored; }
+  } catch {
+    // KV unavailable/misconfigured — fall through to a fresh lookup.
+  }
+  return null;
+}
+
+async function setCachedMediaUrl(source: string, mediaUrl: string): Promise<void> {
+  MEDIA_URL_CACHE.set(source, { url: mediaUrl, at: Date.now() });
+  const kv = getKv();
+  if (!kv) return;
+  try {
+    await kv.put(cacheKey(source), mediaUrl, { expirationTtl: CACHE_TTL_SEC });
+  } catch {
+    // Non-fatal — in-memory cache still has it for this instance.
+  }
 }
 
 // In-flight de-dup: if several Range requests for the same source arrive
@@ -76,15 +118,15 @@ async function lookupMediaUrl(source: string): Promise<string | null> {
 }
 
 async function resolveMediaUrl(source: string): Promise<string | null> {
-  const cached = getCachedMediaUrl(source);
+  const cached = await getCachedMediaUrl(source);
   if (cached) return cached;
 
   const existing = INFLIGHT.get(source);
   if (existing) return existing;
 
-  const promise = lookupMediaUrl(source).then((mediaUrl) => {
+  const promise = lookupMediaUrl(source).then(async (mediaUrl) => {
     INFLIGHT.delete(source);
-    if (mediaUrl) MEDIA_URL_CACHE.set(source, { url: mediaUrl, at: Date.now() });
+    if (mediaUrl) await setCachedMediaUrl(source, mediaUrl);
     return mediaUrl;
   }).catch((err) => {
     INFLIGHT.delete(source);
