@@ -285,7 +285,6 @@ import uuid
 from pathlib import Path
 from fastapi import Body
 from fastapi.responses import FileResponse
-from starlette.background import BackgroundTask
 
 JOB_DIR = Path(os.environ.get("VIDEO_JOB_DIR", "/tmp/video-downloader-jobs"))
 JOB_TTL_SECONDS = int(os.environ.get("VIDEO_JOB_TTL_SECONDS", "3600"))
@@ -350,12 +349,7 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
         if output_format not in audio_formats | video_formats:
             raise RuntimeError("This output format is not supported.")
         if output_format in audio_formats:
-            if is_video and not is_audio:
-                selector = "bestaudio/best"
-            elif is_audio:
-                selector = format_id
-            else:
-                raise RuntimeError("No compatible audio stream was found.")
+            selector = "bestaudio/best"
         else:
             if not is_video:
                 raise RuntimeError("Select a video format to create a video file.")
@@ -374,7 +368,7 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
                     job["message"] = "Downloading video…"
                 elif data.get("status") == "finished":
                     job["progress"] = 96
-                    job["message"] = "Preparing MP4 file…"
+                    job["message"] = "Preparing output file…"
         opts = {"format": selector, "outtmpl": output_template, "noplaylist": True,
                 "quiet": True, "no_warnings": True, "cachedir": False,
                 "socket_timeout": 30, "retries": 2, "fragment_retries": 2,
@@ -471,5 +465,4 @@ def get_download_job_file(job_id: str, token: str = Query(...), x_api_key: str |
         _remove_job(job_id)
         raise HTTPException(status_code=404, detail="The temporary file has expired.")
     mime = {".mp4": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".flac": "audio/flac"}.get(path.suffix.lower(), "application/octet-stream")
-    return FileResponse(path, filename=filename, media_type=mime,
-                        background=BackgroundTask(_remove_job, job_id))
+    return FileResponse(path, filename=filename, media_type=mime)
