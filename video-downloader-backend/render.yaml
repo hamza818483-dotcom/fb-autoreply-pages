@@ -13,3 +13,7 @@ services:
         value: "3.12.8"
       - key: API_KEY
         sync: false
+      - key: VIDEO_JOB_TTL_SECONDS
+        value: "3600"
+      - key: VIDEO_JOB_MAX_BYTES
+        value: "524288000"
