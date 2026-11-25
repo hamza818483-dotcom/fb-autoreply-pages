@@ -68,9 +68,22 @@ export async function POST(request: Request) {
     }
 
     const medias = Array.isArray(data.medias) ? data.medias as Array<Record<string, unknown>> : [];
+    const host = source.hostname.toLowerCase().replace(/^www\\./, "");
+    const platform = host.includes("youtube") || host === "youtu.be" ? "YouTube"
+      : host.includes("facebook") || host === "fb.watch" ? "Facebook"
+      : host.includes("instagram") ? "Instagram"
+      : host.includes("tiktok") ? "TikTok"
+      : host === "x.com" || host.includes("twitter.com") ? "X"
+      : host === "pin.it" || host.includes("pinterest") ? "Pinterest" : "Social media";
+    // YouTube downloads are intentionally routed to official creator exports.
+    // Data/API keys provide metadata/search, not downloadable media files.
+    const downloadSupported = platform !== "YouTube";
     return json({
       error: false,
       provider: "SELF_HOSTED",
+      platform,
+      download_supported: downloadSupported,
+      notice: downloadSupported ? undefined : "For your own YouTube videos, download the original file using YouTube Studio or Google Takeout. YouTube Data API keys do not grant video-download access.",
       title: typeof data.title === "string" ? data.title : "Video Found",
       author: typeof data.author === "string" ? data.author : undefined,
       thumbnail: typeof data.thumbnail === "string" ? data.thumbnail : undefined,
