@@ -13,7 +13,7 @@ const ALLOWED_HOSTS = new Set([
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Video-Provider": "SELF_HOSTED" },
   });
 }
 
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     const medias = Array.isArray(data.medias) ? data.medias as Array<Record<string, unknown>> : [];
     return json({
       error: false,
+      provider: "SELF_HOSTED",
       title: typeof data.title === "string" ? data.title : "Video Found",
       author: typeof data.author === "string" ? data.author : undefined,
       thumbnail: typeof data.thumbnail === "string" ? data.thumbnail : undefined,
