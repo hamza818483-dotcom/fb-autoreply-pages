@@ -149,6 +149,7 @@ def extract_video_info(source_url: str):
 
     formats = info.get("formats") or []
     progressive = []
+    video_only = []
     audio_only = []
     seen = set()
 
@@ -165,14 +166,18 @@ def extract_video_info(source_url: str):
         if video_codec and video_codec != "none" and audio_codec and audio_codec != "none":
             progressive.append(item)
             seen.add(item["format_id"])
+        elif video_codec and video_codec != "none":
+            video_only.append(item)
+            seen.add(item["format_id"])
         elif (not video_codec or video_codec == "none") and audio_codec and audio_codec != "none":
             audio_only.append(item)
             seen.add(item["format_id"])
 
     progressive.sort(key=lambda item: (item.get("height") or 0, item.get("filesize") or 0), reverse=True)
+    video_only.sort(key=lambda item: (item.get("height") or 0, item.get("filesize") or 0), reverse=True)
     audio_only.sort(key=lambda item: item.get("filesize") or 0, reverse=True)
 
-    if not progressive and not audio_only:
+    if not progressive and not video_only and not audio_only:
         raise HTTPException(
             status_code=422,
             detail="The platform returned no directly downloadable video/audio formats for this link.",
@@ -184,7 +189,7 @@ def extract_video_info(source_url: str):
         "thumbnail": info.get("thumbnail"),
         "duration": info.get("duration"),
         "platform": info.get("extractor_key") or info.get("extractor"),
-        "medias": progressive + audio_only,
+        "medias": progressive + video_only + audio_only,
     }
 
 
@@ -320,7 +325,7 @@ def _cleanup_worker():
 
 threading.Thread(target=_cleanup_worker, name="video-job-cleanup", daemon=True).start()
 
-def _job_worker(job_id: str, token: str, source_url: str, format_id: str):
+def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output_format: str):
     with JOB_LOCK:
         if job_id in DOWNLOAD_JOBS:
             DOWNLOAD_JOBS[job_id]["status"] = "processing"
@@ -340,10 +345,21 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str):
         vcodec, acodec = selected.get("vcodec"), selected.get("acodec")
         is_video = bool(vcodec and vcodec != "none")
         is_audio = bool(acodec and acodec != "none")
-        if is_video and not is_audio:
-            selector = f"{format_id}+bestaudio/best"
+        audio_formats = {"mp3", "m4a", "wav", "flac"}
+        video_formats = {"mp4", "webm", "mkv"}
+        if output_format not in audio_formats | video_formats:
+            raise RuntimeError("This output format is not supported.")
+        if output_format in audio_formats:
+            if is_video and not is_audio:
+                selector = "bestaudio/best"
+            elif is_audio:
+                selector = format_id
+            else:
+                raise RuntimeError("No compatible audio stream was found.")
         else:
-            selector = format_id
+            if not is_video:
+                raise RuntimeError("Select a video format to create a video file.")
+            selector = f"{format_id}+bestaudio/best" if not is_audio else format_id
         def progress_hook(data):
             with JOB_LOCK:
                 job = DOWNLOAD_JOBS.get(job_id)
@@ -363,11 +379,20 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str):
                 "quiet": True, "no_warnings": True, "cachedir": False,
                 "socket_timeout": 30, "retries": 2, "fragment_retries": 2,
                 "progress_hooks": [progress_hook], "max_filesize": JOB_MAX_BYTES}
-        if is_video:
-            if not shutil.which("ffmpeg"):
-                raise RuntimeError("FFmpeg is not installed on the download server yet.")
-            opts["merge_output_format"] = "mp4"
-            opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+        if not shutil.which("ffmpeg"):
+            raise RuntimeError("FFmpeg is not installed on the download server yet.")
+        if output_format in audio_formats:
+            opts["postprocessors"] = [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": output_format,
+                "preferredquality": "0",
+            }]
+        else:
+            opts["merge_output_format"] = output_format
+            opts["postprocessors"] = [{
+                "key": "FFmpegVideoRemuxer",
+                "preferedformat": output_format,
+            }]
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([source_url])
         candidates = [p for p in JOB_DIR.glob(f"{job_id}.*")
@@ -382,8 +407,8 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str):
             job = DOWNLOAD_JOBS.get(job_id)
             if job:
                 job.update(status="complete", progress=100, message="Download ready",
-                           path=str(final_path), filename=("video.mp4" if is_video else final_path.name),
-                           size=size)
+                           path=str(final_path), filename=f"video.{output_format}",
+                           size=size, output_format=output_format)
     except Exception as exc:
         logger.exception("Download job %s failed", job_id)
         with JOB_LOCK:
@@ -403,8 +428,11 @@ def create_download_job(payload: dict = Body(...), x_api_key: str | None = Heade
     if host == "youtube.com" or host.endswith(".youtube.com") or host in ("youtu.be", "youtube-nocookie.com"):
         raise HTTPException(status_code=403, detail="YouTube file extraction is not enabled. Use YouTube Studio or Google Takeout for your own videos.")
     format_id = str(payload.get("format_id") or "")
+    output_format = str(payload.get("output_format") or "mp4").lower()
     if not re.fullmatch(r"[A-Za-z0-9._+-]{1,80}", format_id):
         raise HTTPException(status_code=400, detail="A valid format_id is required.")
+    if output_format not in {"mp4", "webm", "mkv", "mp3", "m4a", "wav", "flac"}:
+        raise HTTPException(status_code=400, detail="The requested output format is not allowed.")
     _cleanup_expired_jobs()
     with JOB_LOCK:
         if sum(1 for item in DOWNLOAD_JOBS.values() if item.get("status") in ("queued", "processing")) >= 1:
@@ -413,7 +441,7 @@ def create_download_job(payload: dict = Body(...), x_api_key: str | None = Heade
         token = secrets.token_urlsafe(32)
         DOWNLOAD_JOBS[job_id] = {"token": token, "status": "queued", "progress": 0,
             "message": "Queued", "created_at": time.time(), "path": None}
-    thread = threading.Thread(target=_job_worker, args=(job_id, token, source, format_id), daemon=True)
+    thread = threading.Thread(target=_job_worker, args=(job_id, token, source, format_id, output_format), daemon=True)
     thread.start()
     return {"job_id": job_id, "token": token, "status": "queued"}
 
@@ -442,5 +470,6 @@ def get_download_job_file(job_id: str, token: str = Query(...), x_api_key: str |
     if not path.is_file():
         _remove_job(job_id)
         raise HTTPException(status_code=404, detail="The temporary file has expired.")
-    return FileResponse(path, filename=filename, media_type="video/mp4" if path.suffix.lower() == ".mp4" else "application/octet-stream",
+    mime = {".mp4": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".flac": "audio/flac"}.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, filename=filename, media_type=mime,
                         background=BackgroundTask(_remove_job, job_id))
