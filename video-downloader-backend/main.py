@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import threading
 from urllib.parse import urlparse
 
@@ -408,22 +409,43 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
                 "preferredquality": "0",
             }]
         else:
-            opts["merge_output_format"] = output_format
-            # Convert rather than merely remux: a source MP4/H.264 stream cannot
-            # simply be relabelled as WebM, and vice versa.
-            opts["postprocessors"] = [{
-                "key": "FFmpegVideoConvertor",
-                "preferedformat": output_format,
-            }]
+            # Merge separate video/audio streams into a broadly compatible
+            # intermediate container, then create the requested final format.
+            opts["merge_output_format"] = "mkv"
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([source_url])
         candidates = [p for p in JOB_DIR.glob(f"{job_id}.*")
                       if p.is_file() and p.suffix.lower() not in (".part", ".ytdl", ".temp")]
         if not candidates:
             raise RuntimeError("The processed download file was not created.")
-        # Prefer the requested extension; do not accidentally serve an intermediate.
+
         matching = [p for p in candidates if p.suffix.lower() == f".{output_format}"]
-        final_path = max(matching or candidates, key=lambda p: p.stat().st_size)
+        if output_format in audio_formats:
+            if not matching:
+                raise RuntimeError(f"The server could not create the requested {output_format.upper()} audio file.")
+            final_path = max(matching, key=lambda p: p.stat().st_size)
+        else:
+            source_path = max(candidates, key=lambda p: p.stat().st_size)
+            final_path = source_path
+            if source_path.suffix.lower() != f".{output_format}":
+                target_path = JOB_DIR / f"{job_id}.{output_format}"
+                if output_format == "mp4":
+                    codec_args = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                                  "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]
+                elif output_format == "webm":
+                    codec_args = ["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "5",
+                                  "-crf", "32", "-b:v", "0", "-c:a", "libopus", "-b:a", "96k"]
+                else:
+                    codec_args = ["-c", "copy"]
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(source_path), *codec_args, str(target_path)],
+                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                    text=True, timeout=1800,
+                )
+                if not target_path.is_file():
+                    raise RuntimeError("FFmpeg did not create the requested output file.")
+                source_path.unlink(missing_ok=True)
+                final_path = target_path
         size = final_path.stat().st_size
         if size <= 0 or size > JOB_MAX_BYTES:
             raise RuntimeError("The resulting file is empty or exceeds the configured file-size limit.")
