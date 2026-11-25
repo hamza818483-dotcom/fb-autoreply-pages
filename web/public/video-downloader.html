@@ -637,7 +637,8 @@
                                 `Fetch failed: ${data.message || 'Video extraction failed.'}\\n\\nRoot cause: ${diagnostic.cause || 'Not provided'}\\nStage: ${diagnostic.stage || 'Unknown'}\\nError code: ${diagnostic.code || 'UNKNOWN'}${diagnostic.upstreamStatus ? `\\nHTTP status: ${diagnostic.upstreamStatus}` : ''}${diagnostic.hint ? `\\n\\nWhat to do: ${diagnostic.hint}` : ''}`
                             );
                         } else {
-                            showError(data.message || `Request failed (HTTP ${response.status}). The server did not provide a root-cause report.`);
+                            const reason = data.message || `The API returned HTTP ${response.status}.`;
+                            showError(`Fetch failed: ${reason}\\n\\nRoot cause: ${reason}\\nStage: Input validation / API response\\nError code: HTTP_${response.status}${response.status >= 500 ? `\\n\\nWhat to do: The server-side request failed. Retry once; if it repeats, share this full diagnostic with support.` : ''}`);
                         }
                         return;
                     }
