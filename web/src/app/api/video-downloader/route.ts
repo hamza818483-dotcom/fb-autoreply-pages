@@ -165,12 +165,12 @@ export async function POST(request: Request) {
   if (providers.length === 0) return json(request, { error: true, message: "Server configuration missing: RAPIDAPI_HOSTS or RAPIDAPI_KEY" }, 500);
 
   let body: { url?: unknown };
-  try { body = await request.json(); } catch { return json({ error: true, message: "Invalid JSON request." }, 400); }
-  if (typeof body.url !== "string" || body.url.length > 4096) return json({ error: true, message: "Please provide a valid video URL." }, 400);
+  try { body = await request.json(); } catch { return json(request, { error: true, message: "Invalid JSON request." }, 400); }
+  if (typeof body.url !== "string" || body.url.length > 4096) return json(request, { error: true, message: "Please provide a valid video URL." }, 400);
   let parsed: URL;
-  try { parsed = new URL(body.url); } catch { return json({ error: true, message: "The video URL is invalid." }, 400); }
-  if (!["https:","http:"].includes(parsed.protocol)) return json({ error: true, message: "Only HTTP and HTTPS links are supported." }, 400);
-  if (!ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) return json({ error: true, message: "This website is not in the supported platform list." }, 400);
+  try { parsed = new URL(body.url); } catch { return json(request, { error: true, message: "The video URL is invalid." }, 400); }
+  if (!["https:","http:"].includes(parsed.protocol)) return json(request, { error: true, message: "Only HTTP and HTTPS links are supported." }, 400);
+  if (!ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) return json(request, { error: true, message: "This website is not in the supported platform list." }, 400);
 
   let lastQuota: Record<string, string> = {};
   const attempts: { provider: ProviderConfig; key: string }[] = [];
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
       let data: unknown;
       try { data = JSON.parse(raw); } catch {
         if (!isLastAttempt) continue;
-        return json({ error: true, message: "Video provider returned an invalid response." }, 502, quota);
+        return json(request, { error: true, message: "Video provider returned an invalid response." }, 502, quota);
       }
       const normalized = provider.normalize(data);
       // Provider-level failure (e.g. "API unreachable" from the backend)
@@ -203,8 +203,8 @@ export async function POST(request: Request) {
       return json(request, normalized, upstream.ok ? 200 : upstream.status, quota);
     } catch {
       if (!isLastAttempt) continue;
-      return json({ error: true, message: "Could not connect to the video provider. Please try again." }, 502, lastQuota);
+      return json(request, { error: true, message: "Could not connect to the video provider. Please try again." }, 502, lastQuota);
     }
   }
-  return json({ error: true, message: "All providers have exhausted their quota." }, 429, lastQuota);
+  return json(request, { error: true, message: "All providers have exhausted their quota." }, 429, lastQuota);
 }
