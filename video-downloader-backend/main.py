@@ -225,12 +225,18 @@ def extract(
             message = raw.lower()
             # Keep the actionable extractor reason, but never return full URLs/tokens.
             safe_reason = re.sub(r"https?://\S+", "[source URL]", raw)
-            r"(?i)\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\s*[:=]\s*([^\s,;]+)",
+            safe_reason = re.sub(
+                r"(?i)\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\s*[:=]\s*([^\s,;]+)",
+                r"\1=[redacted]",
+                safe_reason,
+            )
             safe_reason = safe_reason.strip()[-700:] or "yt-dlp returned an empty extraction error."
             if any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
                 code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
             elif "429" in message or "too many requests" in message:
                 code, status, hint = "SOURCE_RATE_LIMITED", 429, "The source platform is rate-limiting requests from this server. Wait before retrying and avoid repeated rapid fetches."
+            elif "403" in message or "forbidden" in message:
+                code, status, hint = "SOURCE_ACCESS_DENIED", 502, "The source platform refused the extractor request from this server. This may be an IP-based restriction or a platform-side challenge; it does not by itself mean the video is private. Avoid repeated retries and try again later."
             elif "failed to extract any player response" in message:
                 code, status, hint = "YOUTUBE_PLAYER_RESPONSE_MISSING", 422, "YouTube did not return a usable player response to yt-dlp. This can happen because of server-IP anti-bot checks or YouTube player changes; it is not proof that the video is private. Wait and retry later, or test a different public YouTube video."
             elif any(term in message for term in ("javascript", "js runtime", "challenge", "player response", "po token")):
