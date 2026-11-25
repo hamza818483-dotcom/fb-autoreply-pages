@@ -731,6 +731,17 @@
                         }
                         info.appendChild(outputFormatSelect);
                         
+                        if (data.download_supported === false) {
+                            const note = document.createElement('p');
+                            note.className = 'official-note';
+                            note.style.cssText = 'margin-top:12px;color:#8a4b08;font-weight:600;';
+                            note.textContent = data.notice || 'Use the platform’s official export to download your own video.';
+                            info.appendChild(note);
+                            card.appendChild(info);
+                            downloadOptions.appendChild(card);
+                            return;
+                        }
+
                         const dl = document.createElement('button');
                         dl.className = 'download-link';
                         dl.textContent = 'Download';
