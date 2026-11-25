@@ -212,6 +212,7 @@ def health():
         "temporary_storage": "ephemeral",
         "job_ttl_seconds": JOB_TTL_SECONDS,
         "max_job_bytes": JOB_MAX_BYTES,
+        "job_queue_limit": JOB_QUEUE_LIMIT,
         "youtube_player_client": "yt-dlp default (not forced)",
         "youtube_diagnostics": "redacted verbose diagnostics enabled",
     }
@@ -300,7 +301,9 @@ from fastapi.responses import FileResponse
 JOB_DIR = Path(os.environ.get("VIDEO_JOB_DIR", "/tmp/video-downloader-jobs"))
 JOB_TTL_SECONDS = int(os.environ.get("VIDEO_JOB_TTL_SECONDS", "3600"))
 JOB_MAX_BYTES = int(os.environ.get("VIDEO_JOB_MAX_BYTES", str(500 * 1024 * 1024)))
+JOB_QUEUE_LIMIT = max(1, int(os.environ.get("VIDEO_JOB_QUEUE_LIMIT", "5")))
 JOB_LOCK = threading.RLock()
+DOWNLOAD_SEMAPHORE = threading.BoundedSemaphore(1)
 DOWNLOAD_JOBS = {}
 
 def _remove_job(job_id: str):
@@ -334,6 +337,13 @@ def _cleanup_worker():
         _cleanup_expired_jobs()
 
 threading.Thread(target=_cleanup_worker, name="video-job-cleanup", daemon=True).start()
+
+def _queued_job_worker(job_id: str, token: str, source_url: str, format_id: str, output_format: str):
+    # Render Free runs one media conversion at a time; keep additional student
+    # requests queued instead of rejecting every request while busy.
+    with DOWNLOAD_SEMAPHORE:
+        _job_worker(job_id, token, source_url, format_id, output_format)
+
 
 def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output_format: str):
     with JOB_LOCK:
@@ -449,13 +459,13 @@ def create_download_job(payload: dict = Body(...), x_api_key: str | None = Heade
         raise HTTPException(status_code=400, detail="The requested output format is not allowed.")
     _cleanup_expired_jobs()
     with JOB_LOCK:
-        if sum(1 for item in DOWNLOAD_JOBS.values() if item.get("status") in ("queued", "processing")) >= 1:
-            raise HTTPException(status_code=429, detail="A download is already processing. Please wait.")
+        if sum(1 for item in DOWNLOAD_JOBS.values() if item.get("status") in ("queued", "processing")) >= JOB_QUEUE_LIMIT:
+            raise HTTPException(status_code=429, detail="The download queue is full. Please wait a little and try again.")
         job_id = uuid.uuid4().hex
         token = secrets.token_urlsafe(32)
         DOWNLOAD_JOBS[job_id] = {"token": token, "status": "queued", "progress": 0,
             "message": "Queued", "created_at": time.time(), "path": None}
-    thread = threading.Thread(target=_job_worker, args=(job_id, token, source, format_id, output_format), daemon=True)
+    thread = threading.Thread(target=_queued_job_worker, args=(job_id, token, source, format_id, output_format), daemon=True)
     thread.start()
     return {"job_id": job_id, "token": token, "status": "queued"}
 
