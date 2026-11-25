@@ -17,3 +17,5 @@ services:
         value: "3600"
       - key: VIDEO_JOB_MAX_BYTES
         value: "524288000"
+      - key: VIDEO_JOB_QUEUE_LIMIT
+        value: "5"
