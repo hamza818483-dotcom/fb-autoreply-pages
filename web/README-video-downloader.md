@@ -20,9 +20,9 @@ In the Cloudflare Pages project, open **Settings → Variables and Secrets** and
 - `SELF_API_KEY`: the exact same secret value as Render's `API_KEY`, stored as an encrypted secret.
 - `ATLAS_ALLOWED_ORIGINS`: optional comma-separated exact Atlas origins, e.g. `https://atlas.example.com`. Do not use `*`.
 
-Redeploy Pages after setting variables. The browser only calls the same-origin Pages route; it never receives the Render URL or API key.
+Redeploy Pages after setting variables. The browser only calls the same-origin Next.js Edge API route (deployed through the existing Cloudflare Pages adapter); it never receives the Render URL or API key. Allow enough time for Render Free cold starts; the proxy waits up to 110 seconds for extraction.
 
-## 3. Remove old RapidAPI secrets
+## 3. Protect the public proxy\n\nThe API key protects the Render service, but the same-origin Pages proxy is publicly callable. Before sharing the site, add Cloudflare WAF rate-limiting rules for `/api/video-downloader` and `/api/video-downloader/media` (for example, a modest per-IP request threshold) and monitor Render usage. For stronger abuse protection, add Cloudflare Turnstile verification to the fetch form and validate its token server-side. CORS is not authentication.\n\n## 4. Remove old RapidAPI secrets
 
 After verifying the self-hosted service, remove `RAPIDAPI_KEY` and `RAPIDAPI_HOSTS` from Cloudflare Pages if no other feature uses them. Revoke any previously exposed RapidAPI key in the provider dashboard.
 
