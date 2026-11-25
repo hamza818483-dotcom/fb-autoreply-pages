@@ -789,9 +789,11 @@
                                         link.textContent = 'Tap here to save to your phone';
                                         link.style.cssText = 'display:inline-block;margin-top:12px;padding:12px 18px;border-radius:10px;background:#4776E6;color:#fff;text-decoration:none;font-weight:700;';
                                         progressBox.appendChild(link);
-                                        status.textContent = `Ready • ${state.filename || 'video'} • ${formatFileSize(state.size)}. Tap the button below if your phone did not start downloading automatically.`;
+                                        status.textContent = `Ready • ${state.filename || 'video'} • ${formatFileSize(state.size)}. Tap the save link above to download it to your phone.`;
                                         bar.style.width = '100%';
-                                        button.textContent = 'Download Ready';
+                                        button.disabled = false;
+                                        button.classList.remove('downloading');
+                                        button.textContent = 'Download Again';
                                         break;
                                     }
                                 }
