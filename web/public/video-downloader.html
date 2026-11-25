@@ -289,6 +289,27 @@
         .thumb-dl-btn:hover { background: #000; }
 
         /* 10. Download Options CSS */
+        .provider-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin: 0 0 18px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.28);
+            color: #087f5b;
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+
+        .provider-indicator .provider-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+
         .download-options h3 {
             margin-bottom: 20px;
             font-size: 1.2rem;
@@ -492,6 +513,10 @@
 
                 <!-- 11. Download Options HTML -->
                 <div class="download-options">
+                    <div class="provider-indicator" id="providerIndicator" role="status" aria-live="polite">
+                        <span class="provider-dot"></span>
+                        <span id="providerLabel">API Source: Self-hosted (Render)</span>
+                    </div>
                     <h3>Available Downloads</h3>
                     <div id="downloadOptions"></div>
                 </div>
@@ -558,6 +583,7 @@
             const videoAuthor = document.getElementById('videoAuthor');
             const videoThumbnail = document.getElementById('videoThumbnail');
             const downloadOptions = document.getElementById('downloadOptions');
+            const providerLabel = document.getElementById('providerLabel');
             const thumbQuality = document.getElementById('thumbQuality');
             const thumbDlBtn = document.getElementById('thumbDlBtn');
             const thumbArea = document.getElementById('thumbArea');
@@ -618,6 +644,8 @@
 
             // 24 & 25. displayVideoInfo()
             function displayVideoInfo(data) {
+                const provider = data.provider === 'SELF_HOSTED' ? 'Self-hosted (Render + yt-dlp)' : 'Unknown provider';
+                providerLabel.textContent = `API Source: ${provider}`;
                 videoTitle.textContent = data.title || 'Video Found';
                 videoAuthor.textContent = data.author ? `By ${data.author}` : 'Unknown Creator';
                 videoThumbnail.src = data.thumbnail || '';
