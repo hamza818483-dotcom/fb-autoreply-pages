@@ -176,8 +176,8 @@ def extract(
             raw = str(exc)
             message = raw.lower()
             # Keep the actionable extractor reason, but never return full URLs/tokens.
-            safe_reason = re.sub(r"https?://\\S+", "[source URL]", raw)
-            safe_reason = re.sub(r"(?i)(cookie|authorization|token|signature)=([^&\\s]+)", r"\\1=[redacted]", safe_reason)
+            safe_reason = re.sub(r"https?://\S+", "[source URL]", raw)
+            safe_reason = re.sub(r"(?i)(cookie|authorization|token|signature)=([^&\s]+)", r"\1=[redacted]", safe_reason)
             safe_reason = safe_reason.strip()[-700:] or "yt-dlp returned an empty extraction error."
             if any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
                 code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
@@ -201,7 +201,7 @@ def extract(
             })
         except Exception as exc:
             logger.exception("Unexpected extraction failure")
-            cause = re.sub(r"https?://\\S+", "[source URL]", str(exc))[-500:] or type(exc).__name__
+            cause = re.sub(r"https?://\S+", "[source URL]", str(exc))[-500:] or type(exc).__name__
             raise HTTPException(status_code=502, detail={
                 "message": "The video platform could not be reached.",
                 "code": "BACKEND_UNEXPECTED_ERROR",
