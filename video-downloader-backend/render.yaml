@@ -1,16 +1,14 @@
 services:
   - type: web
     name: fb-video-downloader-api
-    runtime: python
+    runtime: docker
     plan: free
     rootDir: video-downloader-backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.8"
       - key: API_KEY
         sync: false
       - key: VIDEO_JOB_TTL_SECONDS
