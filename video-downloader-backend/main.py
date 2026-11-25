@@ -1,6 +1,7 @@
 import gc
 import hmac
 import os
+import shutil
 import threading
 from urllib.parse import urlparse
 
@@ -8,7 +9,7 @@ import yt_dlp
 from fastapi import FastAPI, Header, HTTPException, Query
 from yt_dlp.utils import DownloadError
 
-app = FastAPI(title="Self-hosted Video Extractor", version="1.0.0")
+app = FastAPI(title="Self-hosted Video Extractor", version="1.1.0")
 API_KEY = os.environ.get("API_KEY", "")
 EXTRACTION_LOCK = threading.BoundedSemaphore(1)
 
@@ -74,15 +75,18 @@ def describe_format(fmt):
 
 
 def extract_video_info(source_url: str):
+    # yt-dlp automatically uses Deno when installed. yt-dlp[default] supplies
+    # the matching yt-dlp-ejs challenge solver package required by YouTube.
     options = {
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
         "skip_download": True,
         "cachedir": False,
-        "socket_timeout": 20,
-        "retries": 1,
-        "extractor_retries": 1,
+        "socket_timeout": 25,
+        "retries": 2,
+        "extractor_retries": 2,
+        "fragment_retries": 2,
         "ignoreerrors": False,
     }
     with yt_dlp.YoutubeDL(options) as ydl:
@@ -121,7 +125,7 @@ def extract_video_info(source_url: str):
     if not progressive and not audio_only:
         raise HTTPException(
             status_code=422,
-            detail="No direct progressive video or audio-only formats are available for this link.",
+            detail="The platform returned no directly downloadable video/audio formats for this link.",
         )
 
     return {
@@ -136,7 +140,13 @@ def extract_video_info(source_url: str):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "video-extractor"}
+    return {
+        "ok": True,
+        "service": "video-extractor",
+        "yt_dlp_version": yt_dlp.version.__version__,
+        "javascript_runtime": "deno" if shutil.which("deno") else None,
+        "youtube_js_challenge_support": bool(shutil.which("deno")),
+    }
 
 
 @app.get("/extract")
@@ -162,6 +172,11 @@ def extract(
             message = str(exc).lower()
             if "private" in message or "login" in message or "sign in" in message:
                 raise HTTPException(status_code=403, detail="This video is private or requires sign-in.")
+            if "javascript" in message or "js runtime" in message or "challenge" in message:
+                raise HTTPException(
+                    status_code=422,
+                    detail="YouTube could not complete its player verification. Please retry later or try another public video.",
+                )
             raise HTTPException(status_code=422, detail="Could not extract this video. It may be unavailable or unsupported.")
         except Exception:
             raise HTTPException(status_code=502, detail="The video platform could not be reached. Please retry.")
