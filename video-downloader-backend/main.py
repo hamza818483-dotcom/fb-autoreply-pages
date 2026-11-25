@@ -203,7 +203,7 @@ def health():
     return {
         "ok": True,
         "service": "video-extractor",
-        "release": "2026-11-26-fix1",
+        "release": "2026-11-26-fix2",
         "yt_dlp_version": yt_dlp.version.__version__,
         "javascript_runtime": "deno" if shutil.which("deno") else None,
         "youtube_js_challenge_support": bool(shutil.which("deno")),
@@ -423,12 +423,12 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
                            path=str(final_path), filename=f"video.{output_format}",
                            size=size, output_format=output_format)
     except Exception as exc:
-        safe_error = re.sub(r"https?://\\S+", "[redacted URL]", str(exc))[:500]
+        safe_error = re.sub(r"https?://\S+", "[redacted URL]", str(exc))[:500]
         logger.error("Download job %s failed: %s", job_id, safe_error)
         with JOB_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
             if job:
-                job.update(status="failed", message=str(exc)[:500], progress=0)
+                job.update(status="failed", message=safe_error, progress=0)
         for p in JOB_DIR.glob(f"{job_id}.*"):
             try: p.unlink(missing_ok=True)
             except OSError: pass
