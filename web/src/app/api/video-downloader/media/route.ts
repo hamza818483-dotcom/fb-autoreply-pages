@@ -10,11 +10,32 @@ const ALLOWED_HOSTS = new Set([
   "pinterest.com", "www.pinterest.com", "pin.it"
 ]);
 
-function error(message: string, status = 400) {
+function allowedOrigin(request: Request): string | null {
+  const origin = request.headers.get("Origin");
+  if (!origin) return null;
+  if (origin === new URL(request.url).origin) return origin;
+  const allowed = (process.env.ATLAS_ALLOWED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean);
+  return allowed.includes(origin) ? origin : null;
+}
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = allowedOrigin(request);
+  return origin ? {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Range, If-Range",
+    "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges, ETag, Last-Modified",
+    "Vary": "Origin",
+  } : {};
+}
+function error(request: Request, message: string, status = 400) {
   return new Response(JSON.stringify({ error: true, message }), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...corsHeaders(request) }
   });
+}
+export async function OPTIONS(request: Request) {
+  if (request.headers.get("Origin") && !allowedOrigin(request)) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers: { ...corsHeaders(request), "Access-Control-Max-Age": "86400" } });
 }
 
 function parseList(raw: string | undefined): string[] {
@@ -93,15 +114,19 @@ async function lookupMediaUrl(source: string): Promise<string | null> {
 
   for (const host of hosts) {
     try {
-      const lookup = await fetch(`https://${host}/v1/social/autolink`, {
+      const special = host === "all-in-one-social-media-saver-api.p.rapidapi.com";
+      const lookup = await fetch(`https://${host}${special ? "/downloadContent" : "/v1/social/autolink"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-RapidAPI-Host": host, "X-RapidAPI-Key": apiKey },
-        body: JSON.stringify({ url: source })
+        body: JSON.stringify(special ? { url: source, format: "mp4", quality: "high" } : { url: source })
       });
       if (lookup.status === 429 || lookup.status === 403) continue; // quota exhausted on this host, try next
       if (!lookup.ok) continue;
-      const data = await lookup.json() as { medias?: Array<{ url?: string; extension?: string; type?: string; quality?: string }> };
-      const medias = Array.isArray(data.medias) ? data.medias : [];
+      const data = await lookup.json() as { medias?: Array<{ url?: string; extension?: string; type?: string; quality?: string }>; media?: unknown; links?: unknown; downloads?: unknown; data?: unknown; downloadUrl?: string };
+      const rawMedias = data.medias ?? data.media ?? data.links ?? data.downloads ?? data.data;
+      const medias = Array.isArray(rawMedias)
+        ? rawMedias.map((item) => typeof item === "string" ? { url: item } : item as { url?: string; extension?: string; type?: string; quality?: string })
+        : typeof data.downloadUrl === "string" ? [{ url: data.downloadUrl }] : [];
       const candidates = medias.filter((m) => typeof m.url === "string" && /^https:\/\//i.test(m.url));
       candidates.sort((a, b) => {
         const aMp4 = a.extension?.toLowerCase() === "mp4" ? 1 : 0;
@@ -138,7 +163,7 @@ async function resolveMediaUrl(source: string): Promise<string | null> {
 
 export async function GET(request: Request) {
   const source = new URL(request.url).searchParams.get("url");
-  if (!source || source.length > 4096) return error("Please provide a video URL.");
+  if (!source || source.length > 4096) return error(request, "Please provide a video URL.");
   let parsed: URL;
   try { parsed = new URL(source); } catch { return error("The video URL is invalid."); }
   if (!["http:", "https:"].includes(parsed.protocol) || !ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) {
@@ -160,11 +185,12 @@ export async function GET(request: Request) {
     }
     const media = await fetch(mediaUrl, { headers: upstreamHeaders });
     if (!(media.ok || media.status === 206) || !media.body) {
-      return error(`Video file could not be fetched (upstream HTTP ${media.status}). Try another link.`, 502);
+      return error(request, `Video file could not be fetched (upstream HTTP ${media.status}). Try another link.`, 502);
     }
     const headers = new Headers();
     headers.set("Content-Type", media.headers.get("Content-Type") || "video/mp4");
     headers.set("Cache-Control", "no-store");
+    for (const [name, value] of Object.entries(corsHeaders(request))) headers.set(name, value);
     headers.set("Content-Disposition", 'inline; filename="source-video.mp4"');
     for (const name of ["Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
       const value = media.headers.get(name);
