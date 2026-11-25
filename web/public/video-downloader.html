@@ -629,13 +629,21 @@
                         body: JSON.stringify({ url: url })
                     });
 
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    const data = await response.json();
-                    if (data.error) throw new Error(data.message || 'Failed to fetch video');
-
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || data.error) {
+                        const diagnostic = data.diagnostic;
+                        if (diagnostic) {
+                            showError(
+                                `Fetch failed: ${data.message || 'Video extraction failed.'}\\n\\nRoot cause: ${diagnostic.cause || 'Not provided'}\\nStage: ${diagnostic.stage || 'Unknown'}\\nError code: ${diagnostic.code || 'UNKNOWN'}${diagnostic.upstreamStatus ? `\\nHTTP status: ${diagnostic.upstreamStatus}` : ''}${diagnostic.hint ? `\\n\\nWhat to do: ${diagnostic.hint}` : ''}`
+                            );
+                        } else {
+                            showError(data.message || `Request failed (HTTP ${response.status}). The server did not provide a root-cause report.`);
+                        }
+                        return;
+                    }
                     displayVideoInfo(data);
                 } catch (error) {
-                    showError(error.message || 'Something went wrong. Please try again.');
+                    showError(`Fetch failed: ${error.message || 'Unknown browser/network error'}\\n\\nRoot cause: The browser could not complete the request to the Video Saver API.\\nStage: Browser → Cloudflare API\\nError code: BROWSER_FETCH_FAILED\\n\\nWhat to do: Check your internet connection, then retry. If it repeats, inspect Cloudflare Pages logs.`);
                 } finally {
                     hideLoader();
                     fetchBtn.disabled = false;
