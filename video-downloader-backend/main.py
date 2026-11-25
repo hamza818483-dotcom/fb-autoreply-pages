@@ -439,24 +439,32 @@ def create_download_job(payload: dict = Body(...), x_api_key: str | None = Heade
     thread.start()
     return {"job_id": job_id, "token": token, "status": "queued"}
 
-@app.get("/jobs/{job_id}")
-def get_download_job(job_id: str, token: str = Query(...), x_api_key: str | None = Header(default=None)):
-    if not API_KEY or not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
-        raise HTTPException(status_code=401, detail="Invalid API key.")
+def _get_valid_job(job_id: str, token: str):
     with JOB_LOCK:
         job = DOWNLOAD_JOBS.get(job_id)
         if not job or not secrets.compare_digest(str(job.get("token", "")), token):
             raise HTTPException(status_code=404, detail="Download job not found or expired.")
+        expired = time.time() - job.get("created_at", time.time()) > JOB_TTL_SECONDS
+    if expired:
+        _remove_job(job_id)
+        raise HTTPException(status_code=404, detail="Download job not found or expired.")
+    return job
+
+
+@app.get("/jobs/{job_id}")
+def get_download_job(job_id: str, token: str = Query(...), x_api_key: str | None = Header(default=None)):
+    if not API_KEY or not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+    job = _get_valid_job(job_id, token)
+    with JOB_LOCK:
         return {key: job.get(key) for key in ("status", "progress", "message", "filename", "size", "downloaded_bytes", "total_bytes")}
 
 @app.get("/jobs/{job_id}/file")
 def get_download_job_file(job_id: str, token: str = Query(...), x_api_key: str | None = Header(default=None)):
     if not API_KEY or not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
         raise HTTPException(status_code=401, detail="Invalid API key.")
+    job = _get_valid_job(job_id, token)
     with JOB_LOCK:
-        job = DOWNLOAD_JOBS.get(job_id)
-        if not job or not secrets.compare_digest(str(job.get("token", "")), token):
-            raise HTTPException(status_code=404, detail="Download job not found or expired.")
         if job.get("status") != "complete" or not job.get("path"):
             raise HTTPException(status_code=409, detail="The download is not ready yet.")
         path = Path(job["path"])
