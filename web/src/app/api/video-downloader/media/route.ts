@@ -58,11 +58,15 @@ export async function GET(request: Request) {
       headers: { "x-api-key": apiKey, "Accept": "application/json" },
       signal: AbortSignal.timeout(110000),
     });
-    const data = await lookup.json().catch(() => ({})) as { detail?: string; medias?: Array<{ url?: string; vcodec?: string; ext?: string }> };
+    const data = await lookup.json().catch(() => ({})) as { detail?: string; medias?: Array<{ url?: string; format_id?: string; vcodec?: string; ext?: string }> };
     if (!lookup.ok) return error(request, data.detail || "Could not resolve this video.", lookup.status);
 
-    const selected = (data.medias || []).find((item) => item.url && item.vcodec && item.vcodec !== "none");
-    if (!selected?.url) return error(request, "No downloadable video stream was found for this link.", 404);
+    const formatId = new URL(request.url).searchParams.get("format_id");
+    if (formatId && !/^[A-Za-z0-9._+-]{1,80}$/.test(formatId)) return error(request, "The selected format is invalid.");
+    const selected = formatId
+      ? (data.medias || []).find((item) => item.url && item.format_id === formatId)
+      : (data.medias || []).find((item) => item.url && item.vcodec && item.vcodec !== "none");
+    if (!selected?.url) return error(request, "The selected download format is no longer available. Fetch the link again.", 404);
 
     const range = request.headers.get("Range");
     const upstreamHeaders = new Headers();
@@ -76,10 +80,19 @@ export async function GET(request: Request) {
       return error(request, `Media host returned HTTP ${media.status}.`, 502);
     }
 
+    const extension = (selected.ext || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+    const fallbackType = extension === "webm" ? "video/webm"
+      : extension === "m4a" ? "audio/mp4"
+      : extension === "mp3" ? "audio/mpeg"
+      : extension === "mp4" ? "video/mp4"
+      : "application/octet-stream";
+    const upstreamType = media.headers.get("Content-Type");
+    const contentType = upstreamType && !upstreamType.toLowerCase().includes("application/octet-stream")
+      ? upstreamType : fallbackType;
     const headers = new Headers({
-      "Content-Type": media.headers.get("Content-Type") || (selected.ext === "webm" ? "video/webm" : "video/mp4"),
+      "Content-Type": contentType,
       "Cache-Control": "no-store",
-      "Content-Disposition": 'inline; filename="source-video"',
+      "Content-Disposition": `attachment; filename="video.${extension}"`,
       ...corsHeaders(request),
     });
     for (const name of ["Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
