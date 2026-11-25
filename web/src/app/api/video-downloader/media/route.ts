@@ -94,8 +94,8 @@ export async function GET(request: Request) {
 
     const extension = (selected.ext || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
     const requestedName = new URL(request.url).searchParams.get("filename") || "video";
-    const cleanName = requestedName.normalize("NFKC").replace(/[\\u0000-\\u001f\\u007f]/g, "").replace(/[\\\\/:"*?<>|]/g, "").trim().slice(0, 100) || "video";
-    const asciiName = cleanName.replace(/[^\\x20-\\x7E]/g, "_").replace(/["\\\\]/g, "_") || "video";
+    const cleanName = requestedName.normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, "").replace(/[\\\/:"*?<>|]/g, "").trim().slice(0, 100) || "video";
+    const asciiName = cleanName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_") || "video";
     const encodedName = encodeURIComponent(cleanName).replace(/['()]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
     const fallbackType = extension === "webm" ? "video/webm"
       : extension === "m4a" ? "audio/mp4"
