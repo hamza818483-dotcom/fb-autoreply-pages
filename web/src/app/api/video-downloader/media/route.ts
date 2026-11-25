@@ -58,8 +58,20 @@ export async function GET(request: Request) {
       headers: { "x-api-key": apiKey, "Accept": "application/json" },
       signal: AbortSignal.timeout(110000),
     });
-    const data = await lookup.json().catch(() => ({})) as { detail?: string; medias?: Array<{ url?: string; format_id?: string; vcodec?: string; ext?: string }> };
-    if (!lookup.ok) return error(request, data.detail || "Could not resolve this video.", lookup.status);
+    const data = await lookup.json().catch(() => ({})) as {
+      detail?: string | { message?: string; code?: string; cause?: string; hint?: string };
+      medias?: Array<{ url?: string; format_id?: string; vcodec?: string; ext?: string }>;
+    };
+    if (!lookup.ok) {
+      const detail = data.detail;
+      const message = typeof detail === "string" ? detail
+        : detail && typeof detail.message === "string" ? detail.message
+        : "Could not resolve this video.";
+      const diagnostic = detail && typeof detail === "object"
+        ? [detail.code, detail.cause, detail.hint].filter(Boolean).join(" — ")
+        : "";
+      return error(request, diagnostic ? `${message} ${diagnostic}` : message, lookup.status);
+    }
 
     const formatId = new URL(request.url).searchParams.get("format_id");
     if (formatId && !/^[A-Za-z0-9._+-]{1,80}$/.test(formatId)) return error(request, "The selected format is invalid.");
