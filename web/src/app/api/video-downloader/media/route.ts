@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     endpoint.searchParams.set("url", source.toString());
     const lookup = await fetch(endpoint.toString(), {
       headers: { "x-api-key": apiKey, "Accept": "application/json" },
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(110000),
     });
     const data = await lookup.json().catch(() => ({})) as { detail?: string; medias?: Array<{ url?: string; vcodec?: string; ext?: string }> };
     if (!lookup.ok) return error(request, data.detail || "Could not resolve this video.", lookup.status);
