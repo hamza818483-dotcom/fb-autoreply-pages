@@ -342,6 +342,9 @@ def _queued_job_worker(job_id: str, token: str, source_url: str, format_id: str,
     # Render Free runs one media conversion at a time; keep additional student
     # requests queued instead of rejecting every request while busy.
     with DOWNLOAD_SEMAPHORE:
+        with JOB_LOCK:
+            if job_id not in DOWNLOAD_JOBS:
+                return
         _job_worker(job_id, token, source_url, format_id, output_format)
 
 
