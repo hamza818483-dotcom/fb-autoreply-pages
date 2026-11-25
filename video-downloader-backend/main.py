@@ -26,9 +26,9 @@ class YtDlpDiagnosticLogger:
     def _safe(message):
         message = str(message)
         # Do not put signed media URLs, video URLs, or request query strings in logs.
-        message = re.sub(r"https?://[^\\s'\\"<>]+", "[redacted URL]", message)
+        message = re.sub(r"https?://[^\s'\"<>]+", "[redacted URL]", message)
         message = re.sub(
-            r"(?i)\\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\\s*[:=]\\s*([^\\s,;]+)",
+            r"(?i)\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\s*[:=]\s*([^\s,;]+)",
             r"\\1=[redacted]",
             message,
         )
@@ -225,7 +225,7 @@ def extract(
             message = raw.lower()
             # Keep the actionable extractor reason, but never return full URLs/tokens.
             safe_reason = re.sub(r"https?://\S+", "[source URL]", raw)
-            safe_reason = re.sub(r"(?i)(cookie|authorization|token|signature)=([^&\s]+)", r"\1=[redacted]", safe_reason)
+            r"(?i)\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\s*[:=]\s*([^\s,;]+)",
             safe_reason = safe_reason.strip()[-700:] or "yt-dlp returned an empty extraction error."
             if any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
                 code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
