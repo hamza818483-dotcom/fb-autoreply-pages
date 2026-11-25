@@ -715,13 +715,22 @@
                         dl.className = 'download-link';
                         dl.textContent = 'Download';
                         dl.onclick = () => {
+                            const sourceUrl = urlInput.value.trim();
+                            const downloadUrl = new URL('/api/video-downloader/media', window.location.origin);
+                            downloadUrl.searchParams.set('url', sourceUrl);
+                            if (media.format_id) downloadUrl.searchParams.set('format_id', media.format_id);
                             dl.classList.add('downloading');
                             dl.textContent = 'Starting...';
-                            forceDownload(media.url, `${data.title || 'video'}.${media.extension}`)
-                                .finally(() => {
-                                    dl.classList.remove('downloading');
-                                    dl.textContent = 'Download';
-                                });
+                            const link = document.createElement('a');
+                            link.href = downloadUrl.toString();
+                            link.download = `video.${String(media.extension || 'mp4').replace(/[^a-z0-9]/gi, '')}`;
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            window.setTimeout(() => {
+                                dl.classList.remove('downloading');
+                                dl.textContent = 'Download';
+                            }, 2500);
                         };
 
                         card.appendChild(info);
