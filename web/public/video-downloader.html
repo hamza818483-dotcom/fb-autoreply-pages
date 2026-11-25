@@ -786,10 +786,10 @@
                                         const link = document.createElement('a');
                                         link.href = fileUrl.toString();
                                         link.download = state.filename || 'video.mp4';
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        link.remove();
-                                        status.textContent = `Ready • ${state.filename || 'video'} • ${formatFileSize(state.size)}. Your phone should now save the file.`;
+                                        link.textContent = 'Tap here to save to your phone';
+                                        link.style.cssText = 'display:inline-block;margin-top:12px;padding:12px 18px;border-radius:10px;background:#4776E6;color:#fff;text-decoration:none;font-weight:700;';
+                                        progressBox.appendChild(link);
+                                        status.textContent = `Ready • ${state.filename || 'video'} • ${formatFileSize(state.size)}. Tap the button below if your phone did not start downloading automatically.`;
                                         bar.style.width = '100%';
                                         button.textContent = 'Download Ready';
                                         break;
