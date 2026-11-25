@@ -165,14 +165,14 @@ export async function GET(request: Request) {
   const source = new URL(request.url).searchParams.get("url");
   if (!source || source.length > 4096) return error(request, "Please provide a video URL.");
   let parsed: URL;
-  try { parsed = new URL(source); } catch { return error("The video URL is invalid."); }
+  try { parsed = new URL(source); } catch { return error(request, "The video URL is invalid."); }
   if (!["http:", "https:"].includes(parsed.protocol) || !ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) {
-    return error("This video platform is not supported.");
+    return error(request, "This video platform is not supported.");
   }
 
   try {
     const mediaUrl = await resolveMediaUrl(parsed.toString());
-    if (!mediaUrl) return error("এই লিংকের জন্য downloadable video পাওয়া যায়নি।", 404);
+    if (!mediaUrl) return error(request, "এই লিংকের জন্য downloadable video পাওয়া যায়নি।", 404);
 
     // Pass byte-range requests through so Mediabunny UrlSource can fetch only
     // the MP4 metadata and selected media packets instead of buffering the file.
@@ -199,6 +199,6 @@ export async function GET(request: Request) {
     // Preserve 206 only when the upstream actually honored the range.
     return new Response(media.body, { status: media.status, headers });
   } catch {
-    return error("Could not fetch this video. It may be private, unavailable, or blocked by the provider.", 502);
+    return error(request, "Could not fetch this video. It may be private, unavailable, or blocked by the provider.", 502);
   }
 }
