@@ -29,7 +29,7 @@ class YtDlpDiagnosticLogger:
         message = re.sub(r"https?://[^\s'\"<>]+", "[redacted URL]", message)
         message = re.sub(
             r"(?i)\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\s*[:=]\s*([^\s,;]+)",
-            r"\\1=[redacted]",
+            r"\1=[redacted]",
             message,
         )
         return message[:900]
