@@ -406,10 +406,14 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
                       if p.is_file() and p.suffix.lower() not in (".part", ".ytdl", ".temp")]
         if not candidates:
             raise RuntimeError("The processed download file was not created.")
-        final_path = max(candidates, key=lambda p: p.stat().st_size)
+        # Prefer the requested extension; do not accidentally serve an intermediate.
+        matching = [p for p in candidates if p.suffix.lower() == f".{output_format}"]
+        final_path = max(matching or candidates, key=lambda p: p.stat().st_size)
         size = final_path.stat().st_size
         if size <= 0 or size > JOB_MAX_BYTES:
-            raise RuntimeError("The resulting file is empty or exceeds the 500 MB limit.")
+            raise RuntimeError("The resulting file is empty or exceeds the configured file-size limit.")
+        if final_path.suffix.lower() != f".{output_format}":
+            raise RuntimeError(f"The server could not create the requested {output_format.upper()} file. Please choose another format.")
         with JOB_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
             if job:
@@ -417,7 +421,8 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
                            path=str(final_path), filename=f"video.{output_format}",
                            size=size, output_format=output_format)
     except Exception as exc:
-        logger.exception("Download job %s failed", job_id)
+        safe_error = re.sub(r"https?://\\S+", "[redacted URL]", str(exc))[:500]
+        logger.error("Download job %s failed: %s", job_id, safe_error)
         with JOB_LOCK:
             job = DOWNLOAD_JOBS.get(job_id)
             if job:
