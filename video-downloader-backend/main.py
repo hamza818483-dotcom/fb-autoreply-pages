@@ -270,3 +270,158 @@ def extract(
     finally:
         gc.collect()
         EXTRACTION_LOCK.release()
+
+
+# Temporary download jobs adapted from the workflow in wpacademy/ytdl-wp-lite.
+# Jobs live only in this Render instance's ephemeral filesystem and memory.
+import secrets
+import time
+import uuid
+from pathlib import Path
+from fastapi import Body
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+
+JOB_DIR = Path(os.environ.get("VIDEO_JOB_DIR", "/tmp/video-downloader-jobs"))
+JOB_TTL_SECONDS = int(os.environ.get("VIDEO_JOB_TTL_SECONDS", "3600"))
+JOB_MAX_BYTES = int(os.environ.get("VIDEO_JOB_MAX_BYTES", str(500 * 1024 * 1024)))
+JOB_LOCK = threading.RLock()
+DOWNLOAD_JOBS = {}
+
+def _remove_job(job_id: str):
+    with JOB_LOCK:
+        job = DOWNLOAD_JOBS.pop(job_id, None)
+    if job:
+        try:
+            Path(job.get("path", "")).unlink(missing_ok=True)
+        except (OSError, ValueError):
+            pass
+
+def _cleanup_expired_jobs():
+    now = time.time()
+    with JOB_LOCK:
+        expired = [key for key, value in DOWNLOAD_JOBS.items()
+                   if now - value.get("created_at", now) > JOB_TTL_SECONDS]
+    for key in expired:
+        _remove_job(key)
+
+def _job_worker(job_id: str, token: str, source_url: str, format_id: str):
+    output_template = str(JOB_DIR / f"{job_id}.%(ext)s")
+    try:
+        JOB_DIR.mkdir(parents=True, exist_ok=True)
+        _cleanup_expired_jobs()
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True,
+                               "cachedir": False, "socket_timeout": 30, "retries": 2,
+                               "fragment_retries": 2, "skip_download": True}) as ydl:
+            info = ydl.extract_info(source_url, download=False)
+        selected = next((f for f in (info.get("formats") or [])
+                         if str(f.get("format_id") or "") == format_id), None)
+        if not selected:
+            raise RuntimeError("The selected format is no longer available. Fetch the link again.")
+        vcodec, acodec = selected.get("vcodec"), selected.get("acodec")
+        is_video = bool(vcodec and vcodec != "none")
+        is_audio = bool(acodec and acodec != "none")
+        if is_video and not is_audio:
+            selector = f"{format_id}+bestaudio/best"
+        else:
+            selector = format_id
+        def progress_hook(data):
+            with JOB_LOCK:
+                job = DOWNLOAD_JOBS.get(job_id)
+                if not job:
+                    return
+                if data.get("status") == "downloading":
+                    total = data.get("total_bytes") or data.get("total_bytes_estimate") or 0
+                    done = data.get("downloaded_bytes") or 0
+                    job["progress"] = min(99, int(done * 100 / total)) if total else job.get("progress", 0)
+                    job["downloaded_bytes"] = done
+                    job["total_bytes"] = total or None
+                    job["message"] = "Downloading video…"
+                elif data.get("status") == "finished":
+                    job["progress"] = 96
+                    job["message"] = "Preparing MP4 file…"
+        opts = {"format": selector, "outtmpl": output_template, "noplaylist": True,
+                "quiet": True, "no_warnings": True, "cachedir": False,
+                "socket_timeout": 30, "retries": 2, "fragment_retries": 2,
+                "progress_hooks": [progress_hook], "max_filesize": JOB_MAX_BYTES}
+        if is_video:
+            if not shutil.which("ffmpeg"):
+                raise RuntimeError("FFmpeg is not installed on the download server yet.")
+            opts["merge_output_format"] = "mp4"
+            opts["postprocessors"] = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([source_url])
+        candidates = [p for p in JOB_DIR.glob(f"{job_id}.*")
+                      if p.is_file() and p.suffix.lower() not in (".part", ".ytdl", ".temp")]
+        if not candidates:
+            raise RuntimeError("The processed download file was not created.")
+        final_path = max(candidates, key=lambda p: p.stat().st_size)
+        size = final_path.stat().st_size
+        if size <= 0 or size > JOB_MAX_BYTES:
+            raise RuntimeError("The resulting file is empty or exceeds the 500 MB limit.")
+        with JOB_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job:
+                job.update(status="complete", progress=100, message="Download ready",
+                           path=str(final_path), filename=("video.mp4" if is_video else final_path.name),
+                           size=size)
+    except Exception as exc:
+        logger.exception("Download job %s failed", job_id)
+        with JOB_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job:
+                job.update(status="failed", message=str(exc)[:500], progress=0)
+        for p in JOB_DIR.glob(f"{job_id}.*"):
+            try: p.unlink(missing_ok=True)
+            except OSError: pass
+
+@app.post("/jobs")
+def create_download_job(payload: dict = Body(...), x_api_key: str | None = Header(default=None)):
+    if not API_KEY or not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+    source = validate_source(str(payload.get("url") or ""))
+    host = (urlparse(source).hostname or "").lower()
+    if host == "youtube.com" or host.endswith(".youtube.com") or host in ("youtu.be", "youtube-nocookie.com"):
+        raise HTTPException(status_code=403, detail="YouTube file extraction is not enabled. Use YouTube Studio or Google Takeout for your own videos.")
+    format_id = str(payload.get("format_id") or "")
+    if not re.fullmatch(r"[A-Za-z0-9._+-]{1,80}", format_id):
+        raise HTTPException(status_code=400, detail="A valid format_id is required.")
+    _cleanup_expired_jobs()
+    with JOB_LOCK:
+        if sum(1 for item in DOWNLOAD_JOBS.values() if item.get("status") in ("queued", "processing")) >= 1:
+            raise HTTPException(status_code=429, detail="A download is already processing. Please wait.")
+        job_id = uuid.uuid4().hex
+        token = secrets.token_urlsafe(32)
+        DOWNLOAD_JOBS[job_id] = {"token": token, "status": "queued", "progress": 0,
+            "message": "Queued", "created_at": time.time(), "path": None}
+    thread = threading.Thread(target=_job_worker, args=(job_id, token, source, format_id), daemon=True)
+    thread.start()
+    return {"job_id": job_id, "token": token, "status": "queued"}
+
+@app.get("/jobs/{job_id}")
+def get_download_job(job_id: str, token: str = Query(...), x_api_key: str | None = Header(default=None)):
+    if not API_KEY or not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+    with JOB_LOCK:
+        job = DOWNLOAD_JOBS.get(job_id)
+        if not job or not secrets.compare_digest(str(job.get("token", "")), token):
+            raise HTTPException(status_code=404, detail="Download job not found or expired.")
+        return {key: job.get(key) for key in ("status", "progress", "message", "filename", "size", "downloaded_bytes", "total_bytes")}
+
+@app.get("/jobs/{job_id}/file")
+def get_download_job_file(job_id: str, token: str = Query(...), x_api_key: str | None = Header(default=None)):
+    if not API_KEY or not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+    with JOB_LOCK:
+        job = DOWNLOAD_JOBS.get(job_id)
+        if not job or not secrets.compare_digest(str(job.get("token", "")), token):
+            raise HTTPException(status_code=404, detail="Download job not found or expired.")
+        if job.get("status") != "complete" or not job.get("path"):
+            raise HTTPException(status_code=409, detail="The download is not ready yet.")
+        path = Path(job["path"])
+        filename = job.get("filename") or "video.mp4"
+    if not path.is_file():
+        _remove_job(job_id)
+        raise HTTPException(status_code=404, detail="The temporary file has expired.")
+    return FileResponse(path, filename=filename, media_type="video/mp4" if path.suffix.lower() == ".mp4" else "application/octet-stream",
+                        background=BackgroundTask(_remove_job, job_id))
