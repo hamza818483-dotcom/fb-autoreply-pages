@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     endpoint.searchParams.set("url", source.toString());
     const upstream = await fetch(endpoint.toString(), {
       headers: { "x-api-key": apiKey, "Accept": "application/json" },
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(110000),
     });
     const data = await upstream.json().catch(() => ({})) as Record<string, unknown>;
     if (!upstream.ok) {
