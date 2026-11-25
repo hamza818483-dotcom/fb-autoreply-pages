@@ -45,8 +45,25 @@ export async function POST(request: Request) {
     });
     const data = await upstream.json().catch(() => ({})) as Record<string, unknown>;
     if (!upstream.ok) {
-      const detail = typeof data.detail === "string" ? data.detail : "Video extraction failed. Please retry.";
-      return json({ error: true, message: detail }, upstream.status);
+      const detail = data.detail;
+      if (detail && typeof detail === "object") {
+        return json({
+          error: true,
+          message: typeof detail.message === "string" ? detail.message : "Video extraction failed.",
+          diagnostic: {
+            code: typeof detail.code === "string" ? detail.code : "UPSTREAM_ERROR",
+            stage: typeof detail.stage === "string" ? detail.stage : "Render backend",
+            cause: typeof detail.cause === "string" ? detail.cause : "No additional cause was provided.",
+            hint: typeof detail.hint === "string" ? detail.hint : "Retry the request.",
+            upstreamStatus: upstream.status,
+          },
+        }, upstream.status);
+      }
+      return json({
+        error: true,
+        message: typeof detail === "string" ? detail : "Video extraction failed. Please retry.",
+        diagnostic: { code: "UPSTREAM_ERROR", stage: "Render backend", cause: "Backend returned an error without diagnostic details.", upstreamStatus: upstream.status },
+      }, upstream.status);
     }
 
     const medias = Array.isArray(data.medias) ? data.medias as Array<Record<string, unknown>> : [];
@@ -67,7 +84,18 @@ export async function POST(request: Request) {
         format_id: media.format_id,
       })),
     });
-  } catch {
-    return json({ error: true, message: "Video service is waking up or temporarily unavailable. Please retry in a minute." }, 502);
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 500) : "Unknown network error";
+    return json({
+      error: true,
+      message: timedOut ? "The video service took too long to respond." : "Could not connect to the video service.",
+      diagnostic: {
+        code: timedOut ? "RENDER_REQUEST_TIMEOUT" : "RENDER_CONNECTION_FAILED",
+        stage: "Cloudflare → Render connection",
+        cause,
+        hint: timedOut ? "Render may be waking up or the source extraction exceeded the 110-second limit." : "Check Render service status, RENDER_API_URL, and Cloudflare-to-Render connectivity.",
+      },
+    }, 502);
   }
 }
