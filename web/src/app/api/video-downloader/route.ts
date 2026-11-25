@@ -3,7 +3,30 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_HOSTS = new Set(["facebook.com","www.facebook.com","m.facebook.com","fb.watch","youtube.com","www.youtube.com","m.youtube.com","youtu.be","instagram.com","www.instagram.com","tiktok.com","www.tiktok.com","vm.tiktok.com","vt.tiktok.com","twitter.com","www.twitter.com","x.com","www.x.com","pinterest.com","www.pinterest.com","pin.it"]);
 
-function json(data: unknown, status = 200, extraHeaders?: Record<string, string>) { return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders } }); }
+function allowedOrigin(request: Request): string | null {
+  const origin = request.headers.get("Origin");
+  if (!origin) return null;
+  if (origin === new URL(request.url).origin) return origin;
+  const allowed = (process.env.ATLAS_ALLOWED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean);
+  return allowed.includes(origin) ? origin : null;
+}
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = allowedOrigin(request);
+  return origin ? {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Expose-Headers": "x-ratelimit-requests-limit, x-ratelimit-requests-remaining, x-ratelimit-requests-reset",
+    "Vary": "Origin",
+  } : {};
+}
+function json(request: Request, data: unknown, status = 200, extraHeaders?: Record<string, string>) {
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...corsHeaders(request), ...extraHeaders } });
+}
+export async function OPTIONS(request: Request) {
+  if (request.headers.get("Origin") && !allowedOrigin(request)) return new Response(null, { status: 403 });
+  return new Response(null, { status: 204, headers: { ...corsHeaders(request), "Access-Control-Max-Age": "86400" } });
+}
 
 const QUOTA_HEADERS = ["x-ratelimit-requests-limit", "x-ratelimit-requests-remaining", "x-ratelimit-requests-reset"];
 function extractQuotaHeaders(h: Headers): Record<string, string> {
@@ -139,7 +162,7 @@ function getProviders(): ProviderConfig[] {
 
 export async function POST(request: Request) {
   const providers = getProviders();
-  if (providers.length === 0) return json({ error: true, message: "Server configuration missing: RAPIDAPI_HOSTS or RAPIDAPI_KEY" }, 500);
+  if (providers.length === 0) return json(request, { error: true, message: "Server configuration missing: RAPIDAPI_HOSTS or RAPIDAPI_KEY" }, 500);
 
   let body: { url?: unknown };
   try { body = await request.json(); } catch { return json({ error: true, message: "Invalid JSON request." }, 400); }
@@ -177,7 +200,7 @@ export async function POST(request: Request) {
       // with more attempts left: fall through to the next provider instead
       // of surfacing a confusing error.
       if (normalized.error && !isLastAttempt && (normalized.medias.length === 0)) continue;
-      return json(normalized, upstream.ok ? 200 : upstream.status, quota);
+      return json(request, normalized, upstream.ok ? 200 : upstream.status, quota);
     } catch {
       if (!isLastAttempt) continue;
       return json({ error: true, message: "Could not connect to the video provider. Please try again." }, 502, lastQuota);
