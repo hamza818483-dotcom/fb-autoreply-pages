@@ -716,6 +716,23 @@
                         detailsLine.textContent = `${String(media.type || 'video').toUpperCase()} • ${String(media.extension || 'mp4').toUpperCase()} • ${sizeLabel}`;
                         info.appendChild(qualityLine);
                         info.appendChild(detailsLine);
+
+                        const outputFormatSelect = document.createElement('select');
+                        outputFormatSelect.setAttribute('aria-label', 'Output file format');
+                        outputFormatSelect.style.cssText = 'margin-top:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#24324a;max-width:150px;';
+                        const outputFormats = media.type === 'audio'
+                            ? ['mp3', 'm4a', 'wav', 'flac']
+                            : ['mp4', 'webm', 'mkv'];
+                        outputFormats.forEach(format => {
+                            const option = document.createElement('option');
+                            option.value = format;
+                            option.textContent = format.toUpperCase();
+                            outputFormatSelect.appendChild(option);
+                        });
+                        if (outputFormats.includes(String(media.extension || '').toLowerCase())) {
+                            outputFormatSelect.value = String(media.extension).toLowerCase();
+                        }
+                        info.appendChild(outputFormatSelect);
                         
                         const dl = document.createElement('button');
                         dl.className = 'download-link';
@@ -741,7 +758,7 @@
                                 const started = await fetch('/api/video-downloader/jobs', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ url: sourceUrl, format_id: selectedMedia.format_id })
+                                    body: JSON.stringify({ url: sourceUrl, format_id: selectedMedia.format_id, output_format: outputFormatSelect.value })
                                 });
                                 const job = await started.json().catch(() => ({}));
                                 if (!started.ok || !job.job_id || !job.token) throw new Error(job.message || 'Could not start processing. Please try again.');
