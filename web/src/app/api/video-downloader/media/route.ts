@@ -93,6 +93,10 @@ export async function GET(request: Request) {
     }
 
     const extension = (selected.ext || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+    const requestedName = new URL(request.url).searchParams.get("filename") || "video";
+    const cleanName = requestedName.normalize("NFKC").replace(/[\\u0000-\\u001f\\u007f]/g, "").replace(/[\\\\/:"*?<>|]/g, "").trim().slice(0, 100) || "video";
+    const asciiName = cleanName.replace(/[^\\x20-\\x7E]/g, "_").replace(/["\\\\]/g, "_") || "video";
+    const encodedName = encodeURIComponent(cleanName).replace(/['()]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
     const fallbackType = extension === "webm" ? "video/webm"
       : extension === "m4a" ? "audio/mp4"
       : extension === "mp3" ? "audio/mpeg"
@@ -104,7 +108,7 @@ export async function GET(request: Request) {
     const headers = new Headers({
       "Content-Type": contentType,
       "Cache-Control": "no-store",
-      "Content-Disposition": `attachment; filename="video.${extension}"`,
+      "Content-Disposition": `attachment; filename="${asciiName}.${extension}"; filename*=UTF-8''${encodedName}.${extension}`,
       ...corsHeaders(request),
     });
     for (const name of ["Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
