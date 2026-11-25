@@ -7,7 +7,7 @@
     
     <!-- 1. SEO Head Setup -->
     <title>All-in-One Video Downloader | TikTok, Instagram, YouTube & More</title>
-    <meta name="description" content="Download high-quality videos from TikTok, Instagram, YouTube, Facebook, and Twitter for free. Fast, easy, and watermark-free video downloader.">
+    <meta name="description" content="Download videos from supported social platforms. For your own YouTube videos, use the official YouTube Studio or Google Takeout export.">
     <meta name="keywords" content="video downloader, tiktok downloader, instagram downloader, youtube downloader, download video online, no watermark video">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://yourdomain.com/">
@@ -16,7 +16,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://yourdomain.com/">
     <meta property="og:title" content="All-in-One Video Downloader">
-    <meta property="og:description" content="Download high-quality videos from TikTok, Instagram, YouTube, Facebook, and Twitter for free.">
+    <meta property="og:description" content="Download videos from supported social platforms, with official export links for your own YouTube videos.">
     <meta property="og:image" content="https://yourdomain.com/og-image.jpg">
 
     <!-- Twitter -->
@@ -207,6 +207,10 @@
             font-weight: 500;
             text-align: center;
         }
+
+        .official-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 16px; }
+        .official-links a { display: inline-block; background: var(--accent-gradient); color: #fff; text-decoration: none; padding: 12px 18px; border-radius: 12px; font-weight: 700; }
+        .official-note { line-height: 1.6; }
 
         /* 8. Results Section CSS */
         .results-section {
@@ -528,7 +532,7 @@
                 <div class="platform-icons">
                     <div class="platform-icon">TikTok</div>
                     <div class="platform-icon">Instagram</div>
-                    <div class="platform-icon">YouTube</div>
+                    <div class="platform-icon">YouTube (Official Export)</div>
                     <div class="platform-icon">Facebook</div>
                     <div class="platform-icon">Twitter / X</div>
                     <div class="platform-icon">Pinterest</div>
@@ -602,6 +606,7 @@
             function handleFetchAction() {
                 const url = urlInput.value.trim();
                 if (!url) return showError('Please paste a valid video URL first.');
+                if (isYouTubeUrl(url)) return showYouTubeOfficialHelp();
 
                 if (AdController) {
                     AdController.show().then(() => fetchVideoInfo()).catch((err) => {
@@ -611,6 +616,38 @@
                 } else {
                     fetchVideoInfo();
                 }
+            }
+
+            function isYouTubeUrl(value) {
+                try {
+                    const host = new URL(value).hostname.toLowerCase().replace(/^www\\./, '');
+                    return host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be' || host === 'youtube-nocookie.com';
+                } catch (_) {
+                    return false;
+                }
+            }
+
+            function showYouTubeOfficialHelp() {
+                resetUI();
+                hideLoader();
+                errorMessage.textContent = 'For videos on your own YouTube channel, download them directly from Google’s official tools. Sign in with the Google account that owns the channel. This Video Saver does not extract YouTube video files.';
+                errorMessage.className = 'error-message official-note';
+                errorMessage.style.display = 'block';
+
+                const links = document.createElement('div');
+                links.className = 'official-links';
+                [
+                    ['Open YouTube Studio', 'https://studio.youtube.com/'],
+                    ['Open Google Takeout', 'https://takeout.google.com/']
+                ].forEach(([label, href]) => {
+                    const link = document.createElement('a');
+                    link.href = href;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = label;
+                    links.appendChild(link);
+                });
+                errorMessage.appendChild(links);
             }
 
             // 23. fetchVideoInfo()
