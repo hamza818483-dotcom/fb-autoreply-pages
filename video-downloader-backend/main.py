@@ -50,7 +50,7 @@ class YtDlpDiagnosticLogger:
 
 YTDLP_DIAGNOSTICS = YtDlpDiagnosticLogger()
 
-app = FastAPI(title="Self-hosted Video Extractor", version="1.1.0")
+app = FastAPI(title="Self-hosted Video Extractor", version="1.2.0")
 API_KEY = os.environ.get("API_KEY", "")
 EXTRACTION_LOCK = threading.BoundedSemaphore(1)
 
@@ -193,6 +193,11 @@ def extract_video_info(source_url: str):
     }
 
 
+@app.get("/")
+def root():
+    return {"ok": True, "service": "video-extractor", "health": "/health"}
+
+
 @app.get("/health")
 def health():
     return {
@@ -236,14 +241,14 @@ def extract(
                 safe_reason,
             )
             safe_reason = safe_reason.strip()[-700:] or "yt-dlp returned an empty extraction error."
-            if any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
-                code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
-            elif "429" in message or "too many requests" in message:
+            if "429" in message or "too many requests" in message:
                 code, status, hint = "SOURCE_RATE_LIMITED", 429, "The source platform is rate-limiting requests from this server. Wait before retrying and avoid repeated rapid fetches."
+            elif "failed to extract any player response" in message:
+                code, status, hint = "YOUTUBE_PLAYER_RESPONSE_MISSING", 422, "YouTube did not return a usable player response to yt-dlp. The logs also show HTTP 403 responses; this usually indicates a platform-side player/access challenge and does not prove that the video is private. Avoid rapid retries and test again later."
+            elif any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
+                code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
             elif "403" in message or "forbidden" in message:
                 code, status, hint = "SOURCE_ACCESS_DENIED", 502, "The source platform refused the extractor request from this server. This may be an IP-based restriction or a platform-side challenge; it does not by itself mean the video is private. Avoid repeated retries and try again later."
-            elif "failed to extract any player response" in message:
-                code, status, hint = "YOUTUBE_PLAYER_RESPONSE_MISSING", 422, "YouTube did not return a usable player response to yt-dlp. This can happen because of server-IP anti-bot checks or YouTube player changes; it is not proof that the video is private. Wait and retry later, or test a different public YouTube video."
             elif any(term in message for term in ("javascript", "js runtime", "challenge", "player response", "po token")):
                 code, status, hint = "PLATFORM_CHALLENGE_FAILED", 422, "The platform's anti-bot/player verification blocked extraction. Retry later or try another public video."
             elif any(term in message for term in ("not available", "unavailable", "removed", "private video")):
@@ -254,7 +259,7 @@ def extract(
                 code, status, hint = "SOURCE_NETWORK_ERROR", 502, "The source platform did not respond reliably. Retry in a moment."
             else:
                 code, status, hint = "EXTRACTION_FAILED", 422, "The extractor failed; use the diagnostic reason below to identify the platform-side issue."
-            logger.exception("Extraction failed [%s]: %s", code, safe_reason)
+            logger.error("Extraction failed [%s]: %s", code, safe_reason)
             raise HTTPException(status_code=status, detail={
                 "message": "Video extraction failed.",
                 "code": code,
@@ -349,7 +354,9 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
         if output_format not in audio_formats | video_formats:
             raise RuntimeError("This output format is not supported.")
         if output_format in audio_formats:
-            selector = "bestaudio/best"
+            if not is_audio:
+                raise RuntimeError("Select an audio format to create an audio file.")
+            selector = format_id
         else:
             if not is_video:
                 raise RuntimeError("Select a video format to create a video file.")
