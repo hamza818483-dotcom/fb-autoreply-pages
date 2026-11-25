@@ -1,40 +1,55 @@
 # Self-hosted Video Saver (Cloudflare Pages + Render)
 
-The existing Video Saver page remains at `/video-downloader.html`. Its same-origin API route `/api/video-downloader` now forwards extraction requests to the self-hosted FastAPI + yt-dlp service on Render. RapidAPI is no longer used by these routes.
+The Video Saver page remains at `/video-downloader.html`. The browser calls same-origin Cloudflare Pages API routes; the Pages routes proxy authenticated requests to the FastAPI + yt-dlp service on Render. No RapidAPI key is used by this workflow.
 
-## 1. Deploy the Render backend
+## Download workflow
 
-1. In Render, create a new **Blueprint** and connect this repository.
-2. Set the Blueprint file path to `video-downloader-backend/render.yaml` if Render asks for it.
-3. Render creates `fb-video-downloader-api`. During setup, provide a strong random value for `API_KEY`.
-4. Generate a key locally with `openssl rand -hex 32`. Keep it private.
-5. After deployment, check `https://YOUR-RENDER-SERVICE.onrender.com/health`.
+1. The student pastes a supported public video URL and selects Fetch.
+2. The Render API uses yt-dlp to return metadata (title, uploader, thumbnail, duration) and available progressive, video-only, and audio-only formats.
+3. The page lists available qualities and lets the student choose an output container:
+   - Video: MP4, WebM, MKV
+   - Audio: MP3, M4A, WAV, FLAC
+4. The student selects Download. Cloudflare creates a job through the authenticated Render API.
+5. A background thread downloads the chosen stream. If the selected video stream has no audio, yt-dlp selects and merges a compatible audio stream.
+6. FFmpeg remuxes the video into the chosen container or extracts/converts audio into the chosen audio format.
+7. The page polls the job endpoint for progress. A random job ID plus high-entropy token protects status and file access.
+8. The student receives a same-origin attachment URL. Files remain in Render's ephemeral `/tmp/video-downloader-jobs` directory for up to one hour, then are deleted automatically. A successful download does not immediately delete the file, allowing a retry before expiry.
 
-The backend uses one extraction slot at a time to protect the 512 MB free instance. Free services sleep after inactivity and may take time to wake. yt-dlp direct progressive formats are returned; separate video-only and manifest formats are intentionally not offered because this service does not merge them with FFmpeg.
+## Render configuration
 
-## 2. Configure Cloudflare Pages
+The Render Blueprint is `video-downloader-backend/render.yaml`. It installs FFmpeg and starts one Uvicorn worker. Configure:
 
-In the Cloudflare Pages project, open **Settings → Variables and Secrets** and add these for Production (and Preview if you use it):
+- `API_KEY`: a strong random secret. Keep it private.
+- `VIDEO_JOB_TTL_SECONDS`: temporary-file lifetime; default 3600 seconds.
+- `VIDEO_JOB_MAX_BYTES`: maximum resulting file size; default 524288000 bytes (500 MB).
 
-- `RENDER_API_URL`: the Render service base URL, e.g. `https://fb-video-downloader-api.onrender.com` (no trailing slash).
-- `SELF_API_KEY`: the exact same secret value as Render's `API_KEY`, stored as an encrypted secret.
-- `ATLAS_ALLOWED_ORIGINS`: optional comma-separated exact Atlas origins, e.g. `https://atlas.example.com`. Do not use `*`.
+The backend allows one active processing job at a time to protect the Render Free instance. Jobs are held in process memory and files are stored on ephemeral disk; a service restart cancels in-memory jobs and removes access to files. This is not persistent storage or a durable queue.
 
-Redeploy Pages after setting variables. The browser only calls the same-origin Next.js Edge API route (deployed through the existing Cloudflare Pages adapter); it never receives the Render URL or API key. Allow enough time for Render Free cold starts; the proxy waits up to 110 seconds for extraction.
+## Cloudflare Pages configuration
 
-## 3. Protect the public proxy\n\nThe API key protects the Render service, but the same-origin Pages proxy is publicly callable. Before sharing the site, add Cloudflare WAF rate-limiting rules for `/api/video-downloader` and `/api/video-downloader/media` (for example, a modest per-IP request threshold) and monitor Render usage. For stronger abuse protection, add Cloudflare Turnstile verification to the fetch form and validate its token server-side. CORS is not authentication.\n\n## 4. Remove old RapidAPI secrets
+Set these Production (and Preview, if needed) variables/secrets:
 
-After verifying the self-hosted service, remove `RAPIDAPI_KEY` and `RAPIDAPI_HOSTS` from Cloudflare Pages if no other feature uses them. Revoke any previously exposed RapidAPI key in the provider dashboard.
+- `RENDER_API_URL`: Render service base URL, without a trailing slash.
+- `SELF_API_KEY`: encrypted secret matching Render's `API_KEY`.
+- `ATLAS_ALLOWED_ORIGINS`: optional comma-separated exact origins for Atlas cross-origin access.
 
-## Supported behavior and limits
+The browser never receives the Render URL or API key. The new job proxy is `/api/video-downloader/jobs`; extraction remains `/api/video-downloader`. The older direct-stream route `/api/video-downloader/media` remains for existing integrations.
 
-- Supported source domains are restricted in the backend to YouTube, Facebook, Instagram, TikTok, X/Twitter, and Pinterest.
-- Only public links that can be accessed without bypassing sign-in, private-account, DRM, or other access restrictions should be used.
-- The extractor returns progressive combined audio/video formats and audio-only formats. Many sources do not provide progressive formats, so some links or qualities will not be available.
-- Direct media URLs are temporary and may expire. The media host may also impose its own download/CORS rules.
-- Render Free is not unlimited: cold starts, monthly instance-hour limits, memory limits, and provider-side throttling apply. This is a best-effort personal project backend, not a high-volume production service.
-- YouTube extraction can change as the platform changes; yt-dlp may need updates or an additional JavaScript runtime for some formats.
+## Source and platform restrictions
+
+- Allowed source domains are validated on both Render and Cloudflare.
+- YouTube direct file extraction is intentionally not enabled. Public visibility does not grant a general download right, and this system does not bypass YouTube sign-in, anti-bot, private-video, DRM, or other access restrictions. For your own channel videos, use YouTube Studio or Google Takeout.
+- Use other source links only when you have the rights and the platform permits downloading them.
+- Cookie-upload / browser-cookie bypass functionality from the WordPress reference plugin is intentionally not ported.
+
+## Operational limits
+
+- Render Free has cold starts, limited memory/CPU/disk, and service-hour limits. One job at a time is intentional.
+- Files are temporary and may be lost on service restart or redeploy.
+- The job progress is based on yt-dlp download hooks; FFmpeg finalization may appear as a short preparation phase.
+- A download link is available only while its job token and temporary file remain valid.
+- The Cloudflare proxy is publicly callable unless you add user authentication / rate limiting. Before sharing with students, protect the endpoints with Cloudflare WAF rate limits or Turnstile and add the site's paid-student authorization check if required.
 
 ## Atlas integration
 
-The existing `/api/video-downloader/media` endpoint remains available for Atlas cross-origin use. It resolves the original public source URL through the self-hosted backend, then streams the selected progressive video while forwarding byte-range requests. Set `ATLAS_ALLOWED_ORIGINS` to Atlas's exact production origin. In Atlas, `VITE_VIDEO_DOWNLOADER_API_BASE` should point to this site's origin.
+The existing `/api/video-downloader/media` endpoint remains available for Atlas cross-origin use. Set `ATLAS_ALLOWED_ORIGINS` to the exact Atlas production origin. In Atlas, `VITE_VIDEO_DOWNLOADER_API_BASE` should point to this site's origin.
