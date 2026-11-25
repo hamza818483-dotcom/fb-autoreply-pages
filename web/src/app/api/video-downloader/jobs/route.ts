@@ -55,8 +55,8 @@ export async function POST(request: Request) {
   if (!cfg) return json(request, "Video Saver backend is not configured.", 503);
   let body: { url?: string; format_id?: string; output_format?: string };
   try { body = await request.json(); } catch { return json(request, "Invalid request body."); }
-  const outputFormat = (body.output_format || "mp4").toLowerCase();
-  if (!body.url || body.url.length > 4096 || !body.format_id || !/^[A-Za-z0-9._+-]{1,80}$/.test(body.format_id) || !["mp4", "webm", "mkv", "mp3", "m4a", "wav", "flac"].includes(outputFormat)) {
+  const outputFormat = body.output_format === undefined ? "mp4" : typeof body.output_format === "string" ? body.output_format.toLowerCase() : "";
+  if (typeof body.url !== "string" || !body.url || body.url.length > 4096 || typeof body.format_id !== "string" || !/^[A-Za-z0-9._+-]{1,80}$/.test(body.format_id) || !["mp4", "webm", "mkv", "mp3", "m4a", "wav", "flac"].includes(outputFormat)) {
     return json(request, "A valid video URL and format are required.");
   }
   try {
