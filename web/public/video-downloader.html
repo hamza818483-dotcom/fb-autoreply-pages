@@ -720,25 +720,70 @@
                         const dl = document.createElement('button');
                         dl.className = 'download-link';
                         dl.textContent = 'Download';
-                        dl.onclick = () => {
+                        dl.onclick = () => startProcessedDownload(dl, media);
+
+                        async function startProcessedDownload(button, selectedMedia) {
                             const sourceUrl = urlInput.value.trim();
-                            const downloadUrl = new URL('/api/video-downloader/media', window.location.origin);
-                            downloadUrl.searchParams.set('url', sourceUrl);
-                            downloadUrl.searchParams.set('filename', (videoTitle.textContent || 'video').slice(0, 120));
-                            if (media.format_id) downloadUrl.searchParams.set('format_id', media.format_id);
-                            dl.classList.add('downloading');
-                            dl.textContent = 'Starting...';
-                            const link = document.createElement('a');
-                            link.href = downloadUrl.toString();
-                            link.download = `video.${String(media.extension || 'mp4').replace(/[^a-z0-9]/gi, '')}`;
-                            document.body.appendChild(link);
-                            link.click();
-                            link.remove();
-                            window.setTimeout(() => {
-                                dl.classList.remove('downloading');
-                                dl.textContent = 'Download';
-                            }, 2500);
-                        };
+                            button.disabled = true;
+                            button.classList.add('downloading');
+                            button.textContent = 'Preparing…';
+                            let progressBox = document.getElementById('videoDownloadProgress');
+                            if (!progressBox) {
+                                progressBox = document.createElement('div');
+                                progressBox.id = 'videoDownloadProgress';
+                                progressBox.style.cssText = 'margin:16px 0;padding:16px;border-radius:14px;background:rgba(71,118,230,.10);color:#24324a;';
+                                downloadOptions.prepend(progressBox);
+                            }
+                            progressBox.innerHTML = '<strong>Preparing your video…</strong><div style="height:9px;background:#dbe4f5;border-radius:9px;margin:10px 0;overflow:hidden"><div id="videoDownloadBar" style="height:100%;width:3%;background:#4776E6;transition:width .4s"></div></div><span id="videoDownloadStatus">Starting secure temporary job…</span>';
+                            const bar = document.getElementById('videoDownloadBar');
+                            const status = document.getElementById('videoDownloadStatus');
+                            try {
+                                const started = await fetch('/api/video-downloader/jobs', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ url: sourceUrl, format_id: selectedMedia.format_id })
+                                });
+                                const job = await started.json().catch(() => ({}));
+                                if (!started.ok || !job.job_id || !job.token) throw new Error(job.message || 'Could not start processing. Please try again.');
+                                status.textContent = 'Download started…';
+                                let completed = false;
+                                for (let attempt = 0; attempt < 1200; attempt++) {
+                                    await new Promise(resolve => window.setTimeout(resolve, 1500));
+                                    const checkUrl = new URL('/api/video-downloader/jobs', window.location.origin);
+                                    checkUrl.searchParams.set('job_id', job.job_id);
+                                    checkUrl.searchParams.set('token', job.token);
+                                    const checked = await fetch(checkUrl.toString(), { cache: 'no-store' });
+                                    const state = await checked.json().catch(() => ({}));
+                                    if (!checked.ok) throw new Error(state.message || 'The temporary download job expired.');
+                                    const percent = Math.max(3, Math.min(100, Number(state.progress) || 3));
+                                    bar.style.width = percent + '%';
+                                    status.textContent = state.message || (percent + '%');
+                                    if (state.status === 'failed') throw new Error(state.message || 'Video processing failed.');
+                                    if (state.status === 'complete') {
+                                        completed = true;
+                                        const fileUrl = new URL('/api/video-downloader/jobs', window.location.origin);
+                                        fileUrl.searchParams.set('job_id', job.job_id);
+                                        fileUrl.searchParams.set('token', job.token);
+                                        fileUrl.searchParams.set('file', '1');
+                                        const link = document.createElement('a');
+                                        link.href = fileUrl.toString();
+                                        link.download = state.filename || 'video.mp4';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        link.remove();
+                                        status.textContent = 'Ready! Your phone should now save the file.';
+                                        bar.style.width = '100%';
+                                        break;
+                                    }
+                                }
+                                if (!completed) throw new Error('Processing is taking too long. Please retry later.');
+                            } catch (error) {
+                                status.textContent = error.message || 'Download failed.';
+                                button.disabled = false;
+                                button.classList.remove('downloading');
+                                button.textContent = 'Try Again';
+                            }
+                        }
 
                         card.appendChild(info);
                         card.appendChild(dl);
