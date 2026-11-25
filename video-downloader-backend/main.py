@@ -193,7 +193,7 @@ def extract_video_info(source_url: str):
     }
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"ok": True, "service": "video-extractor", "health": "/health"}
 
