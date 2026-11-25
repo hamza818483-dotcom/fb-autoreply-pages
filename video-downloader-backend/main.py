@@ -203,6 +203,7 @@ def health():
     return {
         "ok": True,
         "service": "video-extractor",
+        "release": "2026-11-26-fix1",
         "yt_dlp_version": yt_dlp.version.__version__,
         "javascript_runtime": "deno" if shutil.which("deno") else None,
         "youtube_js_challenge_support": bool(shutil.which("deno")),
