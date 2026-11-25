@@ -396,8 +396,10 @@ def _job_worker(job_id: str, token: str, source_url: str, format_id: str, output
             }]
         else:
             opts["merge_output_format"] = output_format
+            # Convert rather than merely remux: a source MP4/H.264 stream cannot
+            # simply be relabelled as WebM, and vice versa.
             opts["postprocessors"] = [{
-                "key": "FFmpegVideoRemuxer",
+                "key": "FFmpegVideoConvertor",
                 "preferedformat": output_format,
             }]
         with yt_dlp.YoutubeDL(opts) as ydl:
