@@ -1,6 +1,8 @@
 import gc
 import hmac
+import logging
 import os
+import re
 import shutil
 import threading
 from urllib.parse import urlparse
@@ -8,6 +10,8 @@ from urllib.parse import urlparse
 import yt_dlp
 from fastapi import FastAPI, Header, HTTPException, Query
 from yt_dlp.utils import DownloadError
+
+logger = logging.getLogger("video_extractor")
 
 app = FastAPI(title="Self-hosted Video Extractor", version="1.1.0")
 API_KEY = os.environ.get("API_KEY", "")
@@ -169,17 +173,42 @@ def extract(
         except HTTPException:
             raise
         except DownloadError as exc:
-            message = str(exc).lower()
-            if "private" in message or "login" in message or "sign in" in message:
-                raise HTTPException(status_code=403, detail="This video is private or requires sign-in.")
-            if "javascript" in message or "js runtime" in message or "challenge" in message:
-                raise HTTPException(
-                    status_code=422,
-                    detail="YouTube could not complete its player verification. Please retry later or try another public video.",
-                )
-            raise HTTPException(status_code=422, detail="Could not extract this video. It may be unavailable or unsupported.")
-        except Exception:
-            raise HTTPException(status_code=502, detail="The video platform could not be reached. Please retry.")
+            raw = str(exc)
+            message = raw.lower()
+            # Keep the actionable extractor reason, but never return full URLs/tokens.
+            safe_reason = re.sub(r"https?://\\S+", "[source URL]", raw)
+            safe_reason = re.sub(r"(?i)(cookie|authorization|token|signature)=([^&\\s]+)", r"\\1=[redacted]", safe_reason)
+            safe_reason = safe_reason.strip()[-700:] or "yt-dlp returned an empty extraction error."
+            if any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
+                code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
+            elif any(term in message for term in ("javascript", "js runtime", "challenge", "player response", "po token")):
+                code, status, hint = "PLATFORM_CHALLENGE_FAILED", 422, "The platform's anti-bot/player verification blocked extraction. Retry later or try another public video."
+            elif any(term in message for term in ("not available", "unavailable", "removed", "private video")):
+                code, status, hint = "VIDEO_UNAVAILABLE", 422, "Check that the video is still public and the link is correct."
+            elif any(term in message for term in ("unsupported url", "no suitable extractor")):
+                code, status, hint = "UNSUPPORTED_SOURCE", 400, "This URL format is not supported by the current extractor."
+            elif any(term in message for term in ("timed out", "timeout", "connection", "network", "http error 5")):
+                code, status, hint = "SOURCE_NETWORK_ERROR", 502, "The source platform did not respond reliably. Retry in a moment."
+            else:
+                code, status, hint = "EXTRACTION_FAILED", 422, "The extractor failed; use the diagnostic reason below to identify the platform-side issue."
+            logger.exception("Extraction failed [%s]: %s", code, safe_reason)
+            raise HTTPException(status_code=status, detail={
+                "message": "Video extraction failed.",
+                "code": code,
+                "stage": "yt-dlp extraction",
+                "cause": safe_reason,
+                "hint": hint,
+            })
+        except Exception as exc:
+            logger.exception("Unexpected extraction failure")
+            cause = re.sub(r"https?://\\S+", "[source URL]", str(exc))[-500:] or type(exc).__name__
+            raise HTTPException(status_code=502, detail={
+                "message": "The video platform could not be reached.",
+                "code": "BACKEND_UNEXPECTED_ERROR",
+                "stage": "backend extraction",
+                "cause": f"{type(exc).__name__}: {cause}",
+                "hint": "Check Render application logs using the timestamp of this request.",
+            })
     finally:
         gc.collect()
         EXTRACTION_LOCK.release()
