@@ -181,6 +181,10 @@ def extract(
             safe_reason = safe_reason.strip()[-700:] or "yt-dlp returned an empty extraction error."
             if any(term in message for term in ("private", "login", "sign in", "authentication", "cookies")):
                 code, status, hint = "VIDEO_REQUIRES_LOGIN", 403, "Try a public video link that does not require an account."
+            elif "429" in message or "too many requests" in message:
+                code, status, hint = "SOURCE_RATE_LIMITED", 429, "The source platform is rate-limiting requests from this server. Wait before retrying and avoid repeated rapid fetches."
+            elif "failed to extract any player response" in message:
+                code, status, hint = "YOUTUBE_PLAYER_RESPONSE_MISSING", 422, "YouTube did not return a usable player response to yt-dlp. This can happen because of server-IP anti-bot checks or YouTube player changes; it is not proof that the video is private. Wait and retry later, or test a different public YouTube video."
             elif any(term in message for term in ("javascript", "js runtime", "challenge", "player response", "po token")):
                 code, status, hint = "PLATFORM_CHALLENGE_FAILED", 422, "The platform's anti-bot/player verification blocked extraction. Retry later or try another public video."
             elif any(term in message for term in ("not available", "unavailable", "removed", "private video")):
