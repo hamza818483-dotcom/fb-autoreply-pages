@@ -708,8 +708,14 @@
                         const info = document.createElement('div');
                         const qLabel = formatQuality(media.quality);
                         const sizeLabel = formatFileSize(media.data_size);
-                        info.innerHTML = `<div class="media-quality">${qLabel}</div>
-                                          <div class="media-type">${media.type.toUpperCase()} • ${media.extension.toUpperCase()} • ${sizeLabel}</div>`;
+                        const qualityLine = document.createElement('div');
+                        qualityLine.className = 'media-quality';
+                        qualityLine.textContent = qLabel;
+                        const detailsLine = document.createElement('div');
+                        detailsLine.className = 'media-type';
+                        detailsLine.textContent = `${String(media.type || 'video').toUpperCase()} • ${String(media.extension || 'mp4').toUpperCase()} • ${sizeLabel}`;
+                        info.appendChild(qualityLine);
+                        info.appendChild(detailsLine);
                         
                         const dl = document.createElement('button');
                         dl.className = 'download-link';
@@ -718,6 +724,7 @@
                             const sourceUrl = urlInput.value.trim();
                             const downloadUrl = new URL('/api/video-downloader/media', window.location.origin);
                             downloadUrl.searchParams.set('url', sourceUrl);
+                            downloadUrl.searchParams.set('filename', (videoTitle.textContent || 'video').slice(0, 120));
                             if (media.format_id) downloadUrl.searchParams.set('format_id', media.format_id);
                             dl.classList.add('downloading');
                             dl.textContent = 'Starting...';
