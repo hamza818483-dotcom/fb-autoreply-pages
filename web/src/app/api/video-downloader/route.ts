@@ -46,15 +46,16 @@ export async function POST(request: Request) {
     const data = await upstream.json().catch(() => ({})) as Record<string, unknown>;
     if (!upstream.ok) {
       const detail = data.detail;
-      if (detail && typeof detail === "object") {
+      if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+        const detailRecord = detail as Record<string, unknown>;
         return json({
           error: true,
-          message: typeof detail.message === "string" ? detail.message : "Video extraction failed.",
+          message: typeof detailRecord.message === "string" ? detailRecord.message : "Video extraction failed.",
           diagnostic: {
-            code: typeof detail.code === "string" ? detail.code : "UPSTREAM_ERROR",
-            stage: typeof detail.stage === "string" ? detail.stage : "Render backend",
-            cause: typeof detail.cause === "string" ? detail.cause : "No additional cause was provided.",
-            hint: typeof detail.hint === "string" ? detail.hint : "Retry the request.",
+            code: typeof detailRecord.code === "string" ? detailRecord.code : "UPSTREAM_ERROR",
+            stage: typeof detailRecord.stage === "string" ? detailRecord.stage : "Render backend",
+            cause: typeof detailRecord.cause === "string" ? detailRecord.cause : "No additional cause was provided.",
+            hint: typeof detailRecord.hint === "string" ? detailRecord.hint : "Retry the request.",
             upstreamStatus: upstream.status,
           },
         }, upstream.status);
