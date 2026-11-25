@@ -304,8 +304,27 @@ def _cleanup_expired_jobs():
                    if now - value.get("created_at", now) > JOB_TTL_SECONDS]
     for key in expired:
         _remove_job(key)
+    # Also clean orphaned files left behind by a Render restart.
+    if JOB_DIR.exists():
+        for old_file in JOB_DIR.iterdir():
+            try:
+                if old_file.is_file() and now - old_file.stat().st_mtime > JOB_TTL_SECONDS:
+                    old_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+def _cleanup_worker():
+    while True:
+        time.sleep(300)
+        _cleanup_expired_jobs()
+
+threading.Thread(target=_cleanup_worker, name="video-job-cleanup", daemon=True).start()
 
 def _job_worker(job_id: str, token: str, source_url: str, format_id: str):
+    with JOB_LOCK:
+        if job_id in DOWNLOAD_JOBS:
+            DOWNLOAD_JOBS[job_id]["status"] = "processing"
+            DOWNLOAD_JOBS[job_id]["message"] = "Inspecting video formats…"
     output_template = str(JOB_DIR / f"{job_id}.%(ext)s")
     try:
         JOB_DIR.mkdir(parents=True, exist_ok=True)
