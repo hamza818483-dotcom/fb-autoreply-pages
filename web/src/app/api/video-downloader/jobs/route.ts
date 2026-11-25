@@ -19,10 +19,22 @@ function cors(request: Request): Headers {
   }
   return headers;
 }
-function json(request: Request, message: string, status = 400) {
+function errorMessage(value: unknown, fallback: string): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const detail = value as Record<string, unknown>;
+    if (typeof detail.message === "string") {
+      const code = typeof detail.code === "string" ? ` (${detail.code})` : "";
+      const hint = typeof detail.hint === "string" ? ` ${detail.hint}` : "";
+      return `${detail.message}${code}${hint}`;
+    }
+  }
+  return fallback;
+}
+function json(request: Request, message: unknown, status = 400) {
   const headers = cors(request);
   headers.set("Content-Type", "application/json; charset=utf-8");
-  return new Response(JSON.stringify({ error: true, message }), { status, headers });
+  return new Response(JSON.stringify({ error: true, message: errorMessage(message, "The download request failed.") }), { status, headers });
 }
 function config() {
   const backend = process.env.RENDER_API_URL?.trim().replace(/\/+$/, "");
@@ -41,9 +53,10 @@ export async function OPTIONS(request: Request) {
 export async function POST(request: Request) {
   const cfg = config();
   if (!cfg) return json(request, "Video Saver backend is not configured.", 503);
-  let body: { url?: string; format_id?: string };
+  let body: { url?: string; format_id?: string; output_format?: string };
   try { body = await request.json(); } catch { return json(request, "Invalid request body."); }
-  if (!body.url || body.url.length > 4096 || !body.format_id || !/^[A-Za-z0-9._+-]{1,80}$/.test(body.format_id)) {
+  const outputFormat = (body.output_format || "mp4").toLowerCase();
+  if (!body.url || body.url.length > 4096 || !body.format_id || !/^[A-Za-z0-9._+-]{1,80}$/.test(body.format_id) || !["mp4", "webm", "mkv", "mp3", "m4a", "wav", "flac"].includes(outputFormat)) {
     return json(request, "A valid video URL and format are required.");
   }
   try {
@@ -53,11 +66,11 @@ export async function POST(request: Request) {
     }
     const response = await fetch(new URL("/jobs", cfg.backend), {
       method: "POST", headers: { "x-api-key": cfg.key, "Content-Type": "application/json" },
-      body: JSON.stringify({ url: source.toString(), format_id: body.format_id }),
+      body: JSON.stringify({ url: source.toString(), format_id: body.format_id, output_format: outputFormat }),
       signal: AbortSignal.timeout(110000),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) return json(request, data.detail || "Could not start the download job.", response.status);
+    if (!response.ok) return json(request, data.detail || data.message || "Could not start the download job.", response.status);
     return new Response(JSON.stringify(data), { status: 202, headers: new Headers({ ...Object.fromEntries(cors(request)), "Content-Type": "application/json" }) });
   } catch {
     return json(request, "Could not contact the download server.", 502);
@@ -84,7 +97,7 @@ export async function GET(request: Request) {
     });
     if (!upstream.ok || !upstream.body) {
       const data = await upstream.json().catch(() => ({}));
-      return json(request, data.detail || "The download is not ready or has expired.", upstream.status);
+      return json(request, data.detail || data.message || "The download is not ready or has expired.", upstream.status);
     }
     const headers = cors(request);
     if (file) {
