@@ -789,8 +789,9 @@
                                         document.body.appendChild(link);
                                         link.click();
                                         link.remove();
-                                        status.textContent = 'Ready! Your phone should now save the file.';
+                                        status.textContent = `Ready • ${state.filename || 'video'} • ${formatFileSize(state.size)}. Your phone should now save the file.`;
                                         bar.style.width = '100%';
+                                        button.textContent = 'Download Ready';
                                         break;
                                     }
                                 }
