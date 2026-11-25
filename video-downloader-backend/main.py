@@ -206,6 +206,11 @@ def health():
         "yt_dlp_version": yt_dlp.version.__version__,
         "javascript_runtime": "deno" if shutil.which("deno") else None,
         "youtube_js_challenge_support": bool(shutil.which("deno")),
+        "ffmpeg_available": bool(shutil.which("ffmpeg")),
+        "download_jobs_enabled": True,
+        "temporary_storage": "ephemeral",
+        "job_ttl_seconds": JOB_TTL_SECONDS,
+        "max_job_bytes": JOB_MAX_BYTES,
         "youtube_player_client": "yt-dlp default (not forced)",
         "youtube_diagnostics": "redacted verbose diagnostics enabled",
     }
