@@ -13,6 +13,43 @@ from yt_dlp.utils import DownloadError
 
 logger = logging.getLogger("video_extractor")
 
+class YtDlpDiagnosticLogger:
+    """Keep only actionable yt-dlp diagnostics and redact request secrets."""
+
+    _MARKERS = (
+        "[debug] [youtube]", "po token", "pot ", "javascript", "js challenge",
+        "player response", "innertube", "extractor args", "http error",
+        "yt-dlp version", "js runtimes", "deno",
+    )
+
+    @staticmethod
+    def _safe(message):
+        message = str(message)
+        # Do not put signed media URLs, video URLs, or request query strings in logs.
+        message = re.sub(r"https?://[^\\s'\\"<>]+", "[redacted URL]", message)
+        message = re.sub(
+            r"(?i)\\b(cookie|authorization|po_token|visitor_data|signature|sig|lsig|key)\\s*[:=]\\s*([^\\s,;]+)",
+            r"\\1=[redacted]",
+            message,
+        )
+        return message[:900]
+
+    def debug(self, message):
+        value = str(message)
+        if any(marker in value.lower() for marker in self._MARKERS):
+            logger.info("yt-dlp diagnostic: %s", self._safe(value))
+
+    def warning(self, message):
+        value = str(message)
+        if any(marker in value.lower() for marker in self._MARKERS):
+            logger.warning("yt-dlp diagnostic: %s", self._safe(value))
+
+    def error(self, message):
+        logger.error("yt-dlp diagnostic: %s", self._safe(message))
+
+
+YTDLP_DIAGNOSTICS = YtDlpDiagnosticLogger()
+
 app = FastAPI(title="Self-hosted Video Extractor", version="1.1.0")
 API_KEY = os.environ.get("API_KEY", "")
 EXTRACTION_LOCK = threading.BoundedSemaphore(1)
@@ -84,6 +121,11 @@ def extract_video_info(source_url: str):
     options = {
         "quiet": True,
         "no_warnings": True,
+        # Verbose mode is routed through a redacting, allow-listed logger so
+        # YouTube client/PO-token/JS-challenge diagnostics reach Render logs
+        # without exposing signed media URLs, cookies, or request tokens.
+        "verbose": True,
+        "logger": YTDLP_DIAGNOSTICS,
         "noplaylist": True,
         "skip_download": True,
         "cachedir": False,
@@ -93,6 +135,10 @@ def extract_video_info(source_url: str):
         "fragment_retries": 2,
         "ignoreerrors": False,
     }
+    logger.info(
+        "Starting extraction: yt-dlp=%s, youtube_player_client=default",
+        yt_dlp.version.__version__,
+    )
     with yt_dlp.YoutubeDL(options) as ydl:
         info = ydl.extract_info(source_url, download=False)
 
@@ -150,6 +196,8 @@ def health():
         "yt_dlp_version": yt_dlp.version.__version__,
         "javascript_runtime": "deno" if shutil.which("deno") else None,
         "youtube_js_challenge_support": bool(shutil.which("deno")),
+        "youtube_player_client": "yt-dlp default (not forced)",
+        "youtube_diagnostics": "redacted verbose diagnostics enabled",
     }
 
 
