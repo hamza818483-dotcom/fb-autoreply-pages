@@ -10,10 +10,10 @@ const ALLOWED_HOSTS = new Set([
   "pinterest.com", "www.pinterest.com", "pin.it",
 ]);
 
-function json(data: unknown, status = 200) {
+function json(data: unknown, status = 200, provider = "SELF_HOSTED") {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Video-Provider": "SELF_HOSTED" },
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Video-Provider": provider },
   });
 }
 
@@ -24,16 +24,54 @@ export async function POST(request: Request) {
     return json({ error: true, message: "Video Saver backend is not configured yet." }, 503);
   }
 
-  let body: { url?: unknown };
+  let body: { url?: unknown; mode?: unknown };
   try { body = await request.json(); } catch { return json({ error: true, message: "Invalid request body." }, 400); }
   if (typeof body.url !== "string" || body.url.length > 4096) {
     return json({ error: true, message: "Please provide a valid video URL." }, 400);
   }
 
+  const mode = body.mode === undefined ? "own" : body.mode;
+  if (mode !== "own" && mode !== "rapidapi") return json({ error: true, message: "Unknown downloader mode." }, 400);
+
   let source: URL;
   try { source = new URL(body.url); } catch { return json({ error: true, message: "The video URL is invalid." }, 400); }
   if (!["http:", "https:"].includes(source.protocol) || !ALLOWED_HOSTS.has(source.hostname.toLowerCase())) {
     return json({ error: true, message: "This platform is not supported." }, 400);
+  }
+
+  if (mode === "rapidapi") {
+    const rapidApiKey = process.env.RAPIDAPI_KEY;
+    if (!rapidApiKey) return json({ error: true, message: "ReditApi is not configured. Add the RAPIDAPI_KEY secret in Cloudflare Pages." }, 503, "RAPIDAPI");
+    const rapidHost = "social-download-all-in-one.p.rapidapi.com";
+    try {
+      const upstream = await fetch(`https://${rapidHost}/v1/social/autolink`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-RapidAPI-Host": rapidHost,
+          "X-RapidAPI-Key": rapidApiKey,
+        },
+        body: JSON.stringify({ url: source.toString() }),
+        signal: AbortSignal.timeout(110000),
+      });
+      const raw = await upstream.text();
+      let data: unknown;
+      try { data = JSON.parse(raw); } catch {
+        return json({ error: true, message: "ReditApi returned an invalid response." }, 502, "RAPIDAPI");
+      }
+      if (!upstream.ok) {
+        const message = data && typeof data === "object" && "message" in data && typeof (data as {message?:unknown}).message === "string"
+          ? (data as {message:string}).message : `ReditApi request failed (HTTP ${upstream.status}).`;
+        return json({ error: true, message }, upstream.status, "RAPIDAPI");
+      }
+      if (!data || typeof data !== "object" || !Array.isArray((data as {medias?:unknown}).medias)) {
+        return json({ error: true, message: "ReditApi response did not contain downloadable media." }, 502, "RAPIDAPI");
+      }
+      return json({ ...(data as Record<string, unknown>), provider: "RAPIDAPI" }, 200, "RAPIDAPI");
+    } catch (error) {
+      const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+      return json({ error: true, message: timedOut ? "ReditApi request timed out." : "Could not connect to ReditApi." }, 502, "RAPIDAPI");
+    }
   }
 
   try {
