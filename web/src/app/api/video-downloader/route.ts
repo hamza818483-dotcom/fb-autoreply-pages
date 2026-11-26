@@ -18,12 +18,6 @@ function json(data: unknown, status = 200, provider = "SELF_HOSTED") {
 }
 
 export async function POST(request: Request) {
-  const backend = process.env.RENDER_API_URL?.trim().replace(/\/+$/, "");
-  const apiKey = process.env.SELF_API_KEY;
-  if (!backend || !apiKey) {
-    return json({ error: true, message: "Video Saver backend is not configured yet." }, 503);
-  }
-
   let body: { url?: unknown; mode?: unknown };
   try { body = await request.json(); } catch { return json({ error: true, message: "Invalid request body." }, 400); }
   if (typeof body.url !== "string" || body.url.length > 4096) {
@@ -73,6 +67,10 @@ export async function POST(request: Request) {
       return json({ error: true, message: timedOut ? "ReditApi request timed out." : "Could not connect to ReditApi." }, 502, "RAPIDAPI");
     }
   }
+
+  const backend = process.env.RENDER_API_URL?.trim().replace(/\/+$/, "");
+  const apiKey = process.env.SELF_API_KEY;
+  if (!backend || !apiKey) return json({ error: true, message: "Video Saver backend is not configured yet." }, 503);
 
   try {
     const endpoint = new URL("/extract", backend);
