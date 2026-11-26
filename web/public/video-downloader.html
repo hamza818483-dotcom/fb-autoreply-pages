@@ -757,14 +757,7 @@
                             dl.onclick = () => {
                                 const mediaUrl = typeof media.url === 'string' ? media.url : '';
                                 if (!mediaUrl) return showError('ReditApi did not return a download link for this option.');
-                                const link = document.createElement('a');
-                                link.href = mediaUrl;
-                                link.target = '_blank';
-                                link.rel = 'noopener noreferrer';
-                                link.download = '';
-                                document.body.appendChild(link);
-                                link.click();
-                                link.remove();
+                                forceDownload(mediaUrl, `${data.title || 'video'}.${media.extension || 'mp4'}`);
                             };
                         } else {
                             dl.onclick = () => startProcessedDownload(dl, media);
