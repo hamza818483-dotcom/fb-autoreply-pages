@@ -115,6 +115,8 @@
             flex-direction: column;
             gap: 15px;
         }
+        .mode-label { font-weight: 700; color: var(--text-main); margin-bottom: -7px; }
+        .mode-select { width: 100%; padding: 15px 18px; border: 2px solid var(--glass-border); border-radius: 15px; background: rgba(255,255,255,.85); color: var(--text-main); font-size: 1rem; font-weight: 700; }
 
         .url-input {
             padding: 18px 25px;
@@ -473,6 +475,11 @@
             <!-- 5. Input Section HTML -->
             <div class="input-section">
                 <div class="input-group">
+                    <label class="mode-label" for="downloaderMode">Select Mode</label>
+                    <select class="mode-select" id="downloaderMode">
+                        <option value="rapidapi">ReditApi (RapidAPI)</option>
+                        <option value="own">Own (Render + yt-dlp)</option>
+                    </select>
                     <input type="url" class="url-input" id="urlInput" placeholder="Paste link from TikTok, Instagram, YouTube..." required>
                     <button class="download-btn" id="fetchBtn">
                         <span>Fetch Video</span>
@@ -576,6 +583,7 @@
             // 20. JS Setup
             const urlInput = document.getElementById('urlInput');
             const fetchBtn = document.getElementById('fetchBtn');
+            const downloaderMode = document.getElementById('downloaderMode');
             const loader = document.getElementById('loader');
             const errorMessage = document.getElementById('errorMessage');
             const resultsSection = document.getElementById('resultsSection');
@@ -602,7 +610,7 @@
             function handleFetchAction() {
                 const url = urlInput.value.trim();
                 if (!url) return showError('Please paste a valid video URL first.');
-                if (isYouTubeUrl(url)) return showYouTubeOfficialHelp();
+                if (downloaderMode.value === "own" && isYouTubeUrl(url)) return showYouTubeOfficialHelp();
 
                 if (AdController) {
                     AdController.show().then(() => fetchVideoInfo()).catch((err) => {
@@ -659,7 +667,7 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ url: url })
+                        body: JSON.stringify({ url: url, mode: downloaderMode.value })
                     });
 
                     const data = await response.json().catch(() => ({}));
@@ -686,7 +694,7 @@
 
             // 24 & 25. displayVideoInfo()
             function displayVideoInfo(data) {
-                const provider = data.provider === 'SELF_HOSTED' ? 'Self-hosted (Render + yt-dlp)' : 'Unknown provider';
+                const provider = data.provider === 'RAPIDAPI' ? 'ReditApi (RapidAPI)' : data.provider === 'SELF_HOSTED' ? 'Own (Render + yt-dlp)' : 'Unknown provider';
                 providerLabel.textContent = `API Source: ${provider}`;
                 videoTitle.textContent = data.title || 'Video Found';
                 const durationLabel = data.duration ? ` • ${formatDuration(data.duration)}` : '';
@@ -745,7 +753,22 @@
                         const dl = document.createElement('button');
                         dl.className = 'download-link';
                         dl.textContent = 'Download';
-                        dl.onclick = () => startProcessedDownload(dl, media);
+                        if (data.provider === 'RAPIDAPI') {
+                            dl.onclick = () => {
+                                const mediaUrl = typeof media.url === 'string' ? media.url : '';
+                                if (!mediaUrl) return showError('ReditApi did not return a download link for this option.');
+                                const link = document.createElement('a');
+                                link.href = mediaUrl;
+                                link.target = '_blank';
+                                link.rel = 'noopener noreferrer';
+                                link.download = '';
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                            };
+                        } else {
+                            dl.onclick = () => startProcessedDownload(dl, media);
+                        }
 
                         async function startProcessedDownload(button, selectedMedia) {
                             const sourceUrl = urlInput.value.trim();
