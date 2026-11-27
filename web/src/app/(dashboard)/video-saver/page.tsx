@@ -368,15 +368,15 @@ function SaverTab() {
   const ytId = getYouTubeId(url.trim());
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">All-in-One Video Downloader</CardTitle>
+    <div className="w-full min-w-0 max-w-full overflow-hidden space-y-4">
+      <Card className="w-full min-w-0 max-w-full overflow-hidden">
+        <CardHeader className="w-full min-w-0 max-w-full overflow-hidden">
+          <CardTitle className="w-full min-w-0 max-w-full break-words">All-in-One Video Downloader</CardTitle>
           <CardDescription className="min-w-0 break-words">
             Facebook, YouTube, Instagram, TikTok সহ supported public video link পেস্ট করে ভিডিও ডাউনলোড করুন।
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="w-full min-w-0 max-w-full space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="video-downloader-mode">Mode Select</Label>
             <select
@@ -511,8 +511,8 @@ function SaverTab() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="flex-row min-w-0 items-center justify-between mb-2">
+      <Card className="w-full min-w-0 max-w-full overflow-hidden">
+        <CardHeader className="flex-row w-full min-w-0 max-w-full items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <History size={16} className="text-muted-foreground" />
             <CardTitle>Download History</CardTitle>
@@ -523,7 +523,7 @@ function SaverTab() {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="min-w-0">
+        <CardContent className="w-full min-w-0 max-w-full overflow-hidden">
           {history.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">এখনো কোনো ভিডিও ফেচ করা হয়নি।</p>
           ) : (
@@ -534,7 +534,7 @@ function SaverTab() {
                 return (
                   <li
                     key={h.id}
-                    className="flex min-w-0 items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
+                    className="flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
                   >
                     <Icon size={14} className="text-muted-foreground shrink-0" />
                     <span className="block min-w-0 flex-1 truncate">{h.name}</span>
@@ -1094,7 +1094,7 @@ function CutterTab() {
               {history.map((h) => (
                 <li key={h.id} className="flex items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0">
                   <FileVideo size={14} className="text-muted-foreground shrink-0" />
-                  <span className="truncate flex-1 min-w-0">{h.name}</span>
+                  <span className="flex-1 min-w-0 truncate [overflow-wrap:anywhere]">{h.name}</span>
                   <span className="text-success text-xs font-semibold shrink-0">Clip created</span>
                 </li>
               ))}
