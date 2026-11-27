@@ -520,6 +520,10 @@ async function generateAiReply(message: string, pageId: string, dlog: { add: (li
   return null;
 }
 
+// Model fallback chain: main model first, then older/newer flash variants
+// if the main model name is invalid or temporarily unavailable for a key.
+const GEMINI_MODELS = ["gemini-3.6-flash", "gemini-3.1-flash", "gemini-3.5-flash"];
+
 async function tryGemini(
   apiKey: string,
   systemPrompt: string,
@@ -528,32 +532,39 @@ async function tryGemini(
   idx: number,
   total: number
 ): Promise<string | null> {
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: message }] }],
-        generationConfig: { maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 } },
-      }),
-      signal: AbortSignal.timeout(25000),
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[fb-webhook] Gemini failed:", res.status, errText);
-      if (log) await log.add(`❌ Gemini key #${idx}/${total} FAILED — HTTP ${res.status}\n${errText.slice(0, 300)}`);
-      return null;
+  for (let m = 0; m < GEMINI_MODELS.length; m++) {
+    const model = GEMINI_MODELS[m];
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: message }] }],
+          generationConfig: { maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 } },
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("[fb-webhook] Gemini failed:", model, res.status, errText);
+        if (log) await log.add(`❌ Gemini key #${idx}/${total} model=${model} FAILED — HTTP ${res.status}\n${errText.slice(0, 300)}`);
+        continue; // try next model in the chain
+      }
+      const data: any = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        if (log) await log.add(`❌ Gemini key #${idx}/${total} model=${model} — got response but no text (likely blocked/empty): ${JSON.stringify(data).slice(0, 300)}`);
+        continue;
+      }
+      if (log && model !== GEMINI_MODELS[0]) await log.add(`ℹ️ Gemini key #${idx}/${total} succeeded on fallback model=${model}`);
+      return text.trim();
+    } catch (e: any) {
+      console.error("[fb-webhook] tryGemini error:", model, e.message);
+      if (log) await log.add(`❌ Gemini key #${idx}/${total} model=${model} — exception: ${e.message}`);
     }
-    const data: any = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text && log) await log.add(`❌ Gemini key #${idx}/${total} — got response but no text (likely blocked/empty): ${JSON.stringify(data).slice(0, 300)}`);
-    return text ? text.trim() : null;
-  } catch (e: any) {
-    console.error("[fb-webhook] tryGemini error:", e.message);
-    if (log) await log.add(`❌ Gemini key #${idx}/${total} — exception: ${e.message}`);
-    return null;
   }
+  return null;
 }
 
 async function tryGroq(
