@@ -213,7 +213,7 @@ export default function VideoSaverPage() {
         </button>
         <button
           onClick={() => setTab("cutter")}
-          className={`flex-1 h-9 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-0 h-9 rounded-lg px-1 text-center text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
             tab === "cutter" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
           }`}
         >
