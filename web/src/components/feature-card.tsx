@@ -1,25 +1,29 @@
 "use client";
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
+import { ArrowRight, type LucideIcon } from "lucide-react";
 
 export function FeatureCard({
   href,
-  title,
   icon: Icon,
+  title,
 }: {
   href: string;
-  title: string;
   icon: LucideIcon;
+  title: string;
 }) {
   return (
     <Link
       href={href}
-      className="flex min-w-0 min-h-[82px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-3 shadow-sm text-center transition-colors hover:border-primary/40 hover:bg-muted/40"
+      className="group relative flex min-w-0 flex-col gap-3.5 rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:border-primary/30 text-left"
     >
-      <Icon size={22} strokeWidth={1.8} className="text-primary" />
-      <span className="text-[14px] font-bold leading-tight tracking-tight break-words text-foreground">
-        {title}
-      </span>
+      <div className="w-12 h-12 rounded-[14px] flex items-center justify-center bg-secondary text-primary">
+        <Icon size={24} />
+      </div>
+      <div className="text-[16px] font-bold tracking-tight break-words">{title}</div>
+      <div className="flex items-center gap-1.5 text-primary text-xs font-semibold mt-auto">
+        Manage
+        <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+      </div>
     </Link>
   );
 }
