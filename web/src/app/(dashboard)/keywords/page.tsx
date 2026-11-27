@@ -48,11 +48,18 @@ export default function KeywordsPage() {
     if (!currentPageId) { setMsg({ text: "Please select a page first", ok: false }); return; }
     if (file.size > 5 * 1024 * 1024) { setMsg({ text: "Image must be 5 MB or smaller", ok: false }); return; }
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setMsg({ text: "Use a JPG, PNG, or WebP image", ok: false }); return; }
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session?.access_token) { setMsg({ text: "Please sign in again", ok: false }); return; }
     setUploadingImage(target);
     setMsg({ text: "Uploading image...", ok: true });
     try {
+      // Refresh the access token before sending it to the upload API. A browser
+      // session can still be signed in while its cached access token has expired.
+      let { data: { session }, error: sessionError } = await sb.auth.refreshSession();
+      if (sessionError || !session?.access_token) {
+        const current = await sb.auth.getSession();
+        session = current.data.session;
+      }
+      if (!session?.access_token) throw new Error("Could not refresh your login session. Please sign in again.");
+
       const form = new FormData();
       form.append("file", file);
       form.append("page_id", currentPageId);
