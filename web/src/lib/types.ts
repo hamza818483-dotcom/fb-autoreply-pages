@@ -20,6 +20,7 @@ export type KeywordReply = {
   page_id: string;
   keyword: string;
   reply: string;
+  private_reply?: string | null;
   created_at?: string;
 };
 

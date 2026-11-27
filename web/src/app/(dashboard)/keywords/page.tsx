@@ -19,6 +19,7 @@ export default function KeywordsPage() {
   const [loading, setLoading] = React.useState(true);
   const [kw, setKw] = React.useState("");
   const [reply, setReply] = React.useState("");
+  const [privateReply, setPrivateReply] = React.useState("");
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [msg, setMsg] = React.useState<{ text: string; ok: boolean } | null>(null);
 
@@ -33,25 +34,25 @@ export default function KeywordsPage() {
   React.useEffect(() => { load(); }, [load]);
 
   function startEdit(row: KeywordReply) {
-    setEditingId(row.id); setKw(row.keyword); setReply(row.reply);
+    setEditingId(row.id); setKw(row.keyword); setReply(row.reply); setPrivateReply(row.private_reply || "");
   }
   function cancelEdit() {
-    setEditingId(null); setKw(""); setReply(""); setMsg(null);
+    setEditingId(null); setKw(""); setReply(""); setPrivateReply(""); setMsg(null);
   }
 
   async function submit() {
     if (!currentPageId) { setMsg({ text: "প্রথমে একটা পেজ সিলেক্ট করুন", ok: false }); return; }
     if (!kw.trim() || !reply.trim()) { setMsg({ text: "Keyword ও Reply দুটোই দিন", ok: false }); return; }
     if (editingId) {
-      const { error } = await sb.from("keyword_replies").update({ keyword: kw.trim(), reply: reply.trim() }).eq("id", editingId);
+      const { error } = await sb.from("keyword_replies").update({ keyword: kw.trim(), reply: reply.trim(), private_reply: privateReply.trim() || null }).eq("id", editingId);
       if (error) { setMsg({ text: error.message, ok: false }); return; }
       setMsg({ text: "আপডেট হয়েছে", ok: true });
     } else {
-      const { error } = await sb.from("keyword_replies").insert({ keyword: kw.trim(), reply: reply.trim(), page_id: currentPageId });
+      const { error } = await sb.from("keyword_replies").insert({ keyword: kw.trim(), reply: reply.trim(), private_reply: privateReply.trim() || null, page_id: currentPageId });
       if (error) { setMsg({ text: error.message, ok: false }); return; }
       setMsg(null);
     }
-    setKw(""); setReply(""); setEditingId(null);
+    setKw(""); setReply(""); setPrivateReply(""); setEditingId(null);
     await load();
   }
 
@@ -69,8 +70,10 @@ export default function KeywordsPage() {
         <h2 className="font-bold text-[15px] mb-3.5">{editingId ? "Keyword এডিট করুন" : "Keyword → Reply যোগ করুন"}</h2>
         <Label>Keyword (কমা দিয়ে একাধিক লিখুন)</Label>
         <Input value={kw} onChange={(e) => setKw(e.target.value)} placeholder="exam, পরীক্ষা, suggestion" disabled={isExpired} className="mb-3.5" />
-        <Label>Reply মেসেজ</Label>
+        <Label>Public Comment Reply</Label>
         <Textarea value={reply} onChange={(e) => setReply(e.target.value)} placeholder="এই কমেন্টে যা রিপ্লাই যাবে..." disabled={isExpired} className="mb-3.5" />
+        <Label>Private/Inbox Reply (ফাঁকা রাখলে উপরের reply-ই ইনবক্সে যাবে)</Label>
+        <Textarea value={privateReply} onChange={(e) => setPrivateReply(e.target.value)} placeholder="ইনবক্সে যা মেসেজ যাবে..." disabled={isExpired} className="mb-3.5" />
         <div className="flex gap-2.5">
           <Button onClick={submit} disabled={isExpired}>{editingId ? "আপডেট করুন" : "যোগ করুন"}</Button>
           {editingId && <Button variant="secondary" onClick={cancelEdit}>বাতিল</Button>}
@@ -93,6 +96,9 @@ export default function KeywordsPage() {
               <div key={row.id} className="border border-border rounded-xl p-4 hover:shadow-sm transition-shadow">
                 <div className="font-bold text-primary text-xs mb-2">{row.keyword}</div>
                 <div className="text-sm text-muted-foreground whitespace-pre-wrap mb-3 leading-relaxed">{row.reply}</div>
+                {row.private_reply && (
+                  <div className="text-xs text-muted-foreground whitespace-pre-wrap mb-3 leading-relaxed">📩 ইনবক্স: {row.private_reply}</div>
+                )}
                 <div className="flex gap-2">
                   <Button variant="secondary" size="sm" onClick={() => startEdit(row)} disabled={isExpired}>এডিট করুন</Button>
                   <Button variant="destructive" size="sm" onClick={() => remove(row.id)} disabled={isExpired}>ডিলিট করুন</Button>
