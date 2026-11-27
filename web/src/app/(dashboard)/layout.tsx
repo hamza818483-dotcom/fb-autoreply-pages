@@ -2,7 +2,7 @@
 export const runtime = "edge";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Menu, X } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { PagesProvider } from "@/components/providers/pages-provider";
 import { createClient } from "@/lib/supabase";
