@@ -390,7 +390,7 @@ function SaverTab() {
               <option value="own">Own (Render + yt-dlp)</option>
             </select>
           </div>
-          <div className="flex min-w-0 gap-2">
+          <div className="flex w-full min-w-0 max-w-full gap-2">
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -405,15 +405,15 @@ function SaverTab() {
           </div>
 
           {errorMsg && (
-            <div className="flex items-start gap-2 text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
+            <div className="flex w-full min-w-0 max-w-full items-start gap-2 overflow-hidden text-[13px] text-destructive bg-destructive/10 border border-destructive/20 rounded-xl px-3.5 py-3">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <span>{errorMsg}</span>
+              <span className="min-w-0 break-words">{errorMsg}</span>
             </div>
           )}
 
           {quota && (quota.limit !== null || quota.remaining !== null) && (
-            <div className="flex items-center justify-between text-[12px] text-muted-foreground bg-muted/40 border rounded-xl px-3.5 py-2">
-              <span>
+            <div className="flex w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden text-[12px] text-muted-foreground bg-muted/40 border rounded-xl px-3.5 py-2">
+              <span className="min-w-0 truncate">
                 RapidAPI quota: {quota.remaining ?? "?"} / {quota.limit ?? "?"} remaining
               </span>
               <span className="shrink-0">
@@ -426,11 +426,11 @@ function SaverTab() {
 
       {result && (
         <Card className="w-full min-w-0 max-w-full overflow-hidden">
-          <CardHeader>
-            <CardTitle className="truncate">{result.title || "Video Found"}</CardTitle>
-            {result.author && <CardDescription>By {result.author}</CardDescription>}
+          <CardHeader className="w-full min-w-0 max-w-full overflow-hidden">
+            <CardTitle className="w-full min-w-0 max-w-full truncate">{result.title || "Video Found"}</CardTitle>
+            {result.author && <CardDescription className="min-w-0 break-words">By {result.author}</CardDescription>}
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="w-full min-w-0 max-w-full overflow-hidden space-y-4">
             {result.thumbnail && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -441,7 +441,7 @@ function SaverTab() {
             )}
 
             {ytId && (
-              <div className="flex gap-2">
+              <div className="flex w-full min-w-0 max-w-full gap-2">
                 <select
                   value={thumbQuality}
                   onChange={(e) => setThumbQuality(e.target.value)}
@@ -469,26 +469,27 @@ function SaverTab() {
               </div>
             )}
 
-            <div className="min-w-0 space-y-2">
+            <div className="w-full min-w-0 max-w-full overflow-hidden space-y-2">
               {result.download_supported === false ? (
-                <div className="text-[13px] text-warning bg-warning/10 border border-warning/20 rounded-xl px-3.5 py-3">
+                <div className="w-full min-w-0 max-w-full overflow-hidden break-words text-[13px] text-warning bg-warning/10 border border-warning/20 rounded-xl px-3.5 py-3">
                   {result.notice || "এই ভিডিওটি এই mode-এ ডাউনলোড করা যাবে না।"}
                 </div>
               ) : result.medias && result.medias.length > 0 ? (
                 result.medias.map((media, idx) => (
                   <div
                     key={idx}
-                    className="flex min-w-0 items-center justify-between gap-2.5 border border-border rounded-xl px-3.5 py-2.5"
+                    className="flex w-full min-w-0 max-w-full items-center justify-between gap-2.5 overflow-hidden border border-border rounded-xl px-3.5 py-2.5"
                   >
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="text-[13px] font-semibold truncate">{formatQuality(media.quality)}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground truncate">
                         {media.type.toUpperCase()} • {media.extension.toUpperCase()} • {formatFileSize(media.data_size)}
                       </div>
                     </div>
                     <Button
                       type="button"
                       size="sm"
+                      className="shrink-0"
                       onClick={() => handleMediaDownload(media, idx)}
                       disabled={downloadingIdx === idx}
                     >
