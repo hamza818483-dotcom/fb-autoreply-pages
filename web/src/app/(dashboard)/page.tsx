@@ -23,7 +23,7 @@ export default function HomePage() {
       )}
 
       <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3.5">Features</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
         {profile?.role === "super_admin" && (
           <FeatureCard href="/admin" icon={ShieldCheck} title="Admin Panel" desc="কাস্টমার তৈরি, অ্যাক্সেস ও সাবস্ক্রিপশন নিয়ন্ত্রণ করুন" />
         )}
