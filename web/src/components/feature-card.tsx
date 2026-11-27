@@ -29,7 +29,8 @@ export function FeatureCard({
         </Badge>
       )}
       <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-[14px] flex items-center justify-center bg-secondary text-primary">
-        <Icon size={20} className="sm:hidden" />\n        <Icon size={24} className="hidden sm:block" />
+        <Icon size={20} className="sm:hidden" />
+        <Icon size={24} className="hidden sm:block" />
       </div>
       <div className="text-[14px] sm:text-[16px] font-bold tracking-tight break-words">{title}</div>
       <div className="text-[11px] sm:text-[13px] text-muted-foreground leading-snug sm:leading-relaxed -mt-1 sm:-mt-1.5 break-words">{desc}</div>
