@@ -139,7 +139,8 @@ async function handleFbEvent(bodyText, env) {
               const privateMsg = match.private_reply || match.reply;
               const privateResult = await sendPrivateReply(commentId, privateMsg, pageConfig.page_access_token, env);
               if (!privateResult || privateResult.error) {
-                await dlog.add(`❌ Private reply FAILED\n${JSON.stringify(privateResult)}`);
+                const reason = privateResult?.error?.message || privateResult?.error?.error_user_msg || JSON.stringify(privateResult);
+                await dlog.add(`❌ Private reply FAILED\nReason: ${reason}`);
               } else {
                 await dlog.add(`✅ Private (inbox) reply sent`);
               }
@@ -421,20 +422,8 @@ async function replyToComment(commentId, message, pageAccessToken, env) {
 }
 
 async function sendPrivateReply(commentId, message, pageAccessToken, env) {
-  const tgDebug = async (text) => {
-    if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
-      try {
-        await fetch(`https://api.telegram.org/bot${env.DEBUG_BOT_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: env.DEBUG_CHAT_ID, text: text.slice(0, 3800) }),
-        });
-      } catch (e) {}
-    }
-  };
   try {
     const token = pageAccessToken || env.PAGE_ACCESS_TOKEN;
-    await tgDebug(`Attempting private reply\ncommentId: ${commentId}\nmsg: ${message}`);
     const res = await fetch(
       `${GRAPH}/${commentId}/private_replies?message=${encodeURIComponent(message)}&access_token=${encodeURIComponent(token)}`,
       { method: "POST", signal: AbortSignal.timeout(15000) }
@@ -442,14 +431,11 @@ async function sendPrivateReply(commentId, message, pageAccessToken, env) {
     const data = await res.json();
     if (!res.ok) {
       console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
-      await tgDebug("Private reply FAILED:\n" + JSON.stringify(data));
-    } else {
-      await tgDebug("Private reply SUCCESS:\n" + JSON.stringify(data));
     }
     return data;
   } catch (e) {
     console.error("[fb-webhook] sendPrivateReply error:", e.message);
-    await tgDebug("Private reply THREW ERROR:\n" + e.message);
+    return { error: { message: e.message } };
   }
 }
 
