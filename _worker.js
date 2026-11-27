@@ -135,6 +135,15 @@ async function handleFbEvent(bodyText, env) {
               } else {
                 await dlog.add(`✅ Replied (keyword)`);
               }
+
+              const privateMsg = match.private_reply || match.reply;
+              const privateResult = await sendPrivateReply(commentId, privateMsg, pageConfig.page_access_token, env);
+              if (!privateResult || privateResult.error) {
+                await dlog.add(`❌ Private reply FAILED\n${JSON.stringify(privateResult)}`);
+              } else {
+                await dlog.add(`✅ Private (inbox) reply sent`);
+              }
+
               await markReplied(commentId, env);
             } else {
               await dlog.add(`⏭ Already replied — skipped (duplicate)`);
@@ -411,7 +420,7 @@ async function replyToComment(commentId, message, pageAccessToken, env) {
   }
 }
 
-async function sendPrivateReply(commentId, message, env) {
+async function sendPrivateReply(commentId, message, pageAccessToken, env) {
   const tgDebug = async (text) => {
     if (env.DEBUG_BOT_TOKEN && env.DEBUG_CHAT_ID) {
       try {
@@ -424,7 +433,7 @@ async function sendPrivateReply(commentId, message, env) {
     }
   };
   try {
-    const token = env.PAGE_ACCESS_TOKEN;
+    const token = pageAccessToken || env.PAGE_ACCESS_TOKEN;
     await tgDebug(`Attempting private reply\ncommentId: ${commentId}\nmsg: ${message}`);
     const res = await fetch(
       `${GRAPH}/${commentId}/private_replies?message=${encodeURIComponent(message)}&access_token=${encodeURIComponent(token)}`,
