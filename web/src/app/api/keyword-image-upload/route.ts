@@ -1,7 +1,7 @@
 export const runtime = "edge";
 
 const SB_URL = "https://wbdyjpjbczfunyhhmtry.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6IndiZHlqcGpiY3pmdW55aGhtcnkiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc4MDY5Mjk4MCwiZXhwIjoyMDk2MjY4OTgwfQ.0WR1sgVsl_1XWZfSd0Pwoe6Uxp-2GMTksfseMn5aWjg";
+const SB_KEY = "sb_publishable_aQq0-MD_7-rw8sLgAtbJFw_x49dHVmZ";
 
 type R2BucketLike = {
   put: (key: string, value: ArrayBuffer, options?: { httpMetadata?: { contentType?: string; cacheControl?: string } }) => Promise<unknown>;
