@@ -103,6 +103,16 @@ async function handleFbEvent(bodyText: string) {
               } else {
                 await dlog.add(`✅ Replied (keyword)`);
               }
+
+              const privateMsg = match.private_reply || match.reply;
+              const privateResult = await sendPrivateReply(commentId, privateMsg, pageConfig.page_access_token);
+              if (!privateResult || privateResult.error) {
+                const reason = privateResult?.error?.message || privateResult?.error?.error_user_msg || JSON.stringify(privateResult);
+                await dlog.add(`❌ Private reply FAILED\nReason: ${reason}`);
+              } else {
+                await dlog.add(`✅ Private (inbox) reply sent`);
+              }
+
               await markReplied(commentId);
             } else {
               await dlog.add(`⏭ Already replied — skipped (duplicate)`);
@@ -379,6 +389,22 @@ async function replyToComment(commentId: string, message: string, pageAccessToke
     return data;
   } catch (e: any) {
     console.error("[fb-webhook] replyToComment error:", e.message);
+  }
+}
+
+async function sendPrivateReply(commentId: string, message: string, pageAccessToken: string): Promise<any> {
+  try {
+    const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
+    const res = await fetch(
+      `${GRAPH}/${commentId}/private_replies?message=${encodeURIComponent(message)}&access_token=${encodeURIComponent(token || "")}`,
+      { method: "POST", signal: AbortSignal.timeout(15000) }
+    );
+    const data = await res.json();
+    if (!res.ok) console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
+    return data;
+  } catch (e: any) {
+    console.error("[fb-webhook] sendPrivateReply error:", e.message);
+    return { error: { message: e.message } };
   }
 }
 
