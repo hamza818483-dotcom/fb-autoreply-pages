@@ -67,6 +67,9 @@ async function handleFbEvent(bodyText: string) {
 
     for (const entry of body.entry || []) {
       const webhookPageId = entry.id;
+      // TEMP diagnostic ping: confirms the webhook POST actually arrives and
+      // parses, independent of pageConfig/Supabase. Remove once confirmed.
+      await tgDebugGlobal(`[PING] webhook POST received for page_id=${webhookPageId}, changes=${JSON.stringify(entry.changes || []).slice(0, 500)}`);
       const pageConfig = await getPageConfig(webhookPageId);
       if (!pageConfig) {
         await tgDebugGlobal(
@@ -230,6 +233,10 @@ async function tgDebugGlobal(text: string, pageId?: string) {
 }
 
 async function isDebugEnabled(pageId: string): Promise<boolean> {
+  // TEMP: forced on for live diagnosis (webhook producing no output at all).
+  // Revert to the ai_settings-driven check below once confirmed working.
+  return true;
+  /*
   try {
     const r = await fetch(`${SB_URL}/rest/v1/ai_settings?page_id=eq.${encodeURIComponent(pageId)}&select=debug_alerts_enabled`, {
       headers: { apikey: dbKey(), Authorization: `Bearer ${dbKey()}` },
@@ -239,8 +246,9 @@ async function isDebugEnabled(pageId: string): Promise<boolean> {
     if (!Array.isArray(rows) || rows.length === 0) return false;
     return rows[0].debug_alerts_enabled === true;
   } catch {
-    return true; // fail open: better a stray debug message than losing real alerts
+    return true;
   }
+  */
 }
 
 function editDistance(a: string, b: string): number {
