@@ -301,6 +301,8 @@ async function matchKeyword(
         return {
           reply: row.reply || "",
           private_reply: row.private_reply || row.reply || "",
+          reply_image_url: row.reply_image_url || null,
+          private_reply_image_url: row.private_reply_image_url || null,
           matchedKeyword: hit,
         };
       }
