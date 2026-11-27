@@ -20,6 +20,9 @@ export default function KeywordsPage() {
   const [kw, setKw] = React.useState("");
   const [reply, setReply] = React.useState("");
   const [privateReply, setPrivateReply] = React.useState("");
+  const [replyImageUrl, setReplyImageUrl] = React.useState("");
+  const [privateReplyImageUrl, setPrivateReplyImageUrl] = React.useState("");
+  const [uploadingImage, setUploadingImage] = React.useState<"public" | "private" | null>(null);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [msg, setMsg] = React.useState<{ text: string; ok: boolean } | null>(null);
 
@@ -34,25 +37,80 @@ export default function KeywordsPage() {
   React.useEffect(() => { load(); }, [load]);
 
   function startEdit(row: KeywordReply) {
-    setEditingId(row.id); setKw(row.keyword); setReply(row.reply); setPrivateReply(row.private_reply || "");
+    setEditingId(row.id); setKw(row.keyword); setReply(row.reply); setPrivateReply(row.private_reply || ""); setReplyImageUrl(row.reply_image_url || ""); setPrivateReplyImageUrl(row.private_reply_image_url || "");
   }
   function cancelEdit() {
-    setEditingId(null); setKw(""); setReply(""); setPrivateReply(""); setMsg(null);
+    setEditingId(null); setKw(""); setReply(""); setPrivateReply(""); setReplyImageUrl(""); setPrivateReplyImageUrl(""); setMsg(null);
+  }
+
+
+  async function uploadImage(file: File, target: "public" | "private") {
+    if (!currentPageId) { setMsg({ text: "Please select a page first", ok: false }); return; }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) { setMsg({ text: "Please sign in again", ok: false }); return; }
+    setUploadingImage(target);
+    setMsg({ text: "Uploading image...", ok: true });
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("page_id", currentPageId);
+      const response = await fetch("/api/keyword-image-upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.url) throw new Error(data.error || "Image upload failed");
+      if (target === "public") setReplyImageUrl(data.url);
+      else setPrivateReplyImageUrl(data.url);
+      setMsg({ text: "Image uploaded successfully", ok: true });
+    } catch (error) {
+      setMsg({ text: (error as Error).message || "Image upload failed", ok: false });
+    } finally {
+      setUploadingImage(null);
+    }
+  }
+
+  function imageField(label: string, target: "public" | "private", url: string) {
+    return (
+      <div className="mb-4">
+        <Label>{label}</Label>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={isExpired || uploadingImage !== null}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void uploadImage(file, target);
+            event.currentTarget.value = "";
+          }}
+          className="block w-full text-xs text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-primary"
+        />
+        <p className="text-[11px] text-muted-foreground mt-1">JPG, PNG, or WebP · Max 5 MB</p>
+        {url && (
+          <div className="mt-2 flex items-center gap-3">
+            <img src={url} alt={label} className="h-16 w-16 rounded-lg border border-border object-cover" />
+            <Button type="button" size="sm" variant="secondary" onClick={() => target === "public" ? setReplyImageUrl("") : setPrivateReplyImageUrl("")}>Remove Image</Button>
+          </div>
+        )}
+        {uploadingImage === target && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+      </div>
+    );
   }
 
   async function submit() {
     if (!currentPageId) { setMsg({ text: "Please select a page first", ok: false }); return; }
     if (!kw.trim() || !reply.trim()) { setMsg({ text: "Please enter both Keyword and Reply", ok: false }); return; }
     if (editingId) {
-      const { error } = await sb.from("keyword_replies").update({ keyword: kw.trim(), reply: reply.trim(), private_reply: privateReply.trim() || null }).eq("id", editingId);
+      const { error } = await sb.from("keyword_replies").update({ keyword: kw.trim(), reply: reply.trim(), private_reply: privateReply.trim() || null, reply_image_url: replyImageUrl || null, private_reply_image_url: privateReplyImageUrl || null }).eq("id", editingId);
       if (error) { setMsg({ text: error.message, ok: false }); return; }
       setMsg({ text: "Updated successfully", ok: true });
     } else {
-      const { error } = await sb.from("keyword_replies").insert({ keyword: kw.trim(), reply: reply.trim(), private_reply: privateReply.trim() || null, page_id: currentPageId });
+      const { error } = await sb.from("keyword_replies").insert({ keyword: kw.trim(), reply: reply.trim(), private_reply: privateReply.trim() || null, reply_image_url: replyImageUrl || null, private_reply_image_url: privateReplyImageUrl || null, page_id: currentPageId });
       if (error) { setMsg({ text: error.message, ok: false }); return; }
       setMsg(null);
     }
-    setKw(""); setReply(""); setPrivateReply(""); setEditingId(null);
+    setKw(""); setReply(""); setPrivateReply(""); setReplyImageUrl(""); setPrivateReplyImageUrl(""); setEditingId(null);
     await load();
   }
 
@@ -72,8 +130,10 @@ export default function KeywordsPage() {
         <Input value={kw} onChange={(e) => setKw(e.target.value)} placeholder="exam, suggestion, admission" disabled={isExpired} className="mb-3.5" />
         <Label>Public Comment Reply</Label>
         <Textarea value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply that will be posted on the comment..." disabled={isExpired} className="mb-3.5" />
+        {imageField("Public Reply Image", "public", replyImageUrl)}
         <Label>Private/Inbox Reply (leave blank to use the public reply)</Label>
         <Textarea value={privateReply} onChange={(e) => setPrivateReply(e.target.value)} placeholder="Message that will be sent to the inbox..." disabled={isExpired} className="mb-3.5" />
+        {imageField("Private/Inbox Reply Image", "private", privateReplyImageUrl)}
         <div className="flex gap-2.5">
           <Button onClick={submit} disabled={isExpired}>{editingId ? "Update" : "Add"}</Button>
           {editingId && <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>}
