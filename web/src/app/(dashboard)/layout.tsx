@@ -1,19 +1,21 @@
 "use client";
 export const runtime = "edge";
+
 import * as React from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { MessageCircle, Menu, X, ArrowLeft } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ArrowLeft, Menu, MessageCircle, X } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { PagesProvider } from "@/components/providers/pages-provider";
 import { createClient } from "@/lib/supabase";
 
-
 function Topbar() {
   const { profile, session } = useAuth();
   const sb = React.useMemo(() => createClient(), []);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border flex items-center gap-3 px-5 py-3.5 overflow-hidden"
+      className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border flex items-center gap-3 px-5 py-3.5 overflow-visible"
       style={{ paddingTop: "calc(14px + env(safe-area-inset-top, 0px))", maxWidth: "100vw", boxSizing: "border-box" }}
     >
       <div className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-white shrink-0 overflow-hidden" style={{ background: "linear-gradient(135deg, var(--primary), var(--indigo))" }}>
@@ -58,7 +60,8 @@ function Topbar() {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
-  const router = useRouter();\n  const pathname = usePathname();
+  const router = useRouter();
+  const pathname = usePathname();
 
   React.useEffect(() => {
     if (!loading && !session) router.replace("/login");
@@ -75,6 +78,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         className="w-full min-w-0 max-w-[640px] mx-auto px-5 pb-20 overflow-x-hidden"
         style={{ paddingTop: "calc(62px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}
       >
+        {pathname !== "/" && (
+          <div className="mb-3">
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-sm hover:bg-muted"
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+          </div>
+        )}
         {children}
       </main>
     </PagesProvider>
