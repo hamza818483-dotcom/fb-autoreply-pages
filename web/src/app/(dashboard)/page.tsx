@@ -1,5 +1,6 @@
 "use client";
 export const runtime = "edge";
+import { Shield, Video, MessageSquare, Bot, Download } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { usePages } from "@/components/providers/pages-provider";
 import { PageSwitcher } from "@/components/page-switcher";
@@ -24,14 +25,14 @@ export default function HomePage() {
       <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3.5">Features</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
         {profile?.role === "super_admin" && (
-          <FeatureCard href="/admin" title="Admin Panel" desc="কাস্টমার তৈরি, অ্যাক্সেস ও সাবস্ক্রিপশন নিয়ন্ত্রণ করুন" />
+          <FeatureCard href="/admin" title="Admin Panel" icon={Shield} />
         )}
         {profile?.role === "super_admin" && (
-          <FeatureCard href="/video-saver" title="Video Saver" desc="ভিডিও লিংক সেভ করুন অথবা ভিডিও ক্লিপ কেটে নিন" />
+          <FeatureCard href="/video-saver" title="Video Saver" icon={Video} />
         )}
-        <FeatureCard href="/keywords" title="Keyword Reply" desc="নির্দিষ্ট শব্দ কমেন্টে এলে অটো রিপ্লাই পাঠান" />
-        <FeatureCard href="/ai" title="AI Reply" desc="Keyword না মিললে AI দিয়ে স্মার্ট রিপ্লাই জেনারেট করুন" />
-        <FeatureCard href="/export" title="Comment Collector" desc="পোস্টের সব কমেন্ট CSV করে Random Winner-এ ব্যবহার করুন" />
+        <FeatureCard href="/keywords" title="Keyword Reply" icon={MessageSquare} />
+        <FeatureCard href="/ai" title="AI Reply" icon={Bot} />
+        <FeatureCard href="/export" title="Comment Collector" icon={Download} />
       </div>
 
       <PagesSection />
