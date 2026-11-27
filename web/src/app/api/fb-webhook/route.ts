@@ -233,22 +233,27 @@ async function tgDebugGlobal(text: string, pageId?: string) {
 }
 
 async function isDebugEnabled(pageId: string): Promise<boolean> {
-  // TEMP: forced on for live diagnosis (webhook producing no output at all).
-  // Revert to the ai_settings-driven check below once confirmed working.
-  return true;
-  /*
+  // Root cause of "no debug messages at all" found (Nov 27, 2026): this used to
+  // default OFF when no ai_settings row existed for the page, which silently
+  // disabled debug for any page without an explicit settings row. Fixed to
+  // default ON (fail open) — only an explicit `debug_alerts_enabled === false`
+  // turns debug off now. Mirrors the same fix in _worker.js's isDebugEnabled().
   try {
     const r = await fetch(`${SB_URL}/rest/v1/ai_settings?page_id=eq.${encodeURIComponent(pageId)}&select=debug_alerts_enabled`, {
       headers: { apikey: dbKey(), Authorization: `Bearer ${dbKey()}` },
       signal: AbortSignal.timeout(8000),
     });
     const rows: any = await r.json();
-    if (!Array.isArray(rows) || rows.length === 0) return false;
-    return rows[0].debug_alerts_enabled === true;
-  } catch {
+    if (!r.ok) {
+      console.error("[isDebugEnabled] query failed status=", r.status, JSON.stringify(rows).slice(0, 300));
+      return true;
+    }
+    if (!Array.isArray(rows) || rows.length === 0) return true;
+    return rows[0].debug_alerts_enabled !== false;
+  } catch (e: any) {
+    console.error("[isDebugEnabled] exception:", e.message);
     return true;
   }
-  */
 }
 
 function editDistance(a: string, b: string): number {
