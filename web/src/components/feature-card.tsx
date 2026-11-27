@@ -1,43 +1,26 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight, type LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 export function FeatureCard({
   href,
-  icon: Icon,
   title,
   desc,
-  badge,
-  badgeVariant = "success",
 }: {
   href: string;
-  icon: LucideIcon;
   title: string;
   desc: string;
-  badge?: string;
-  badgeVariant?: "success" | "off";
 }) {
   return (
     <Link
       href={href}
-      className="group relative flex min-w-0 flex-col gap-2 sm:gap-3.5 rounded-2xl border border-border bg-card p-3 sm:p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:border-primary/30 text-left"
+      className="flex min-w-0 min-h-[82px] flex-col justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-3 shadow-sm text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
     >
-      {badge && (
-        <Badge variant={badgeVariant} className="absolute top-4 right-4">
-          {badge}
-        </Badge>
-      )}
-      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-[14px] flex items-center justify-center bg-secondary text-primary">
-        <Icon size={20} className="sm:hidden" />
-        <Icon size={24} className="hidden sm:block" />
-      </div>
-      <div className="text-[14px] sm:text-[16px] font-bold tracking-tight break-words">{title}</div>
-      <div className="text-[11px] sm:text-[13px] text-muted-foreground leading-snug sm:leading-relaxed -mt-1 sm:-mt-1.5 break-words">{desc}</div>
-      <div className="flex items-center gap-1 text-primary text-[11px] sm:text-xs font-semibold mt-auto">
-        পরিচালনা করুন
-        <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
-      </div>
+      <span className="text-[14px] font-bold leading-tight tracking-tight break-words text-foreground">
+        {title}
+      </span>
+      <span className="text-[10px] leading-snug text-muted-foreground break-words">
+        {desc}
+      </span>
     </Link>
   );
 }
