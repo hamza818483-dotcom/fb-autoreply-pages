@@ -1,17 +1,15 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight, type LucideIcon } from "lucide-react";
+import { type LucideIcon } from "lucide-react";
 
 export function FeatureCard({
   href,
   icon: Icon,
   title,
-  desc,
 }: {
   href: string;
   icon: LucideIcon;
   title: string;
-  desc: string;
 }) {
   return (
     <Link
@@ -22,11 +20,6 @@ export function FeatureCard({
         <Icon size={24} />
       </div>
       <div className="text-[16px] font-bold tracking-tight break-words">{title}</div>
-      <div className="text-[13px] text-muted-foreground leading-relaxed -mt-1.5">{desc}</div>
-      <div className="flex items-center gap-1.5 text-primary text-xs font-semibold mt-auto">
-        পরিচালনা করুন
-        <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
-      </div>
     </Link>
   );
 }
