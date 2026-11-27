@@ -5,7 +5,7 @@ export const runtime = "edge";
 // not share that worker's routes, so this must exist here too for the
 // Comment Collector feature to work at this domain.
 
-const GRAPH = "https://graph.facebook.com/v19.0";
+const GRAPH = "https://graph.facebook.com/v21.0";
 const SB_URL = "https://wbdyjpjbczfunyhhmtry.supabase.co";
 const SB_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndiZHlqcGpiY3pmdW55aGhtdHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTI5ODAsImV4cCI6MjA5NjI2ODk4MH0.0WR1sgVsl_1XWZfSd0Pwoe6Uxp-2GMTksfseMn5aWjg";
@@ -206,48 +206,83 @@ export async function POST(request: Request) {
       nextUrl = data.paging?.next || null;
     }
 
-    // Drop the page's own comments (its auto-replies to commenters, posted
-    // back as top-level "stream" comments by Graph API) — these aren't real
-    // audience commenters and shouldn't count toward anyone's entry/total.
-    const withoutPageReplies = comments.filter((c) => {
-      if (pageFbId && c.fromId === String(pageFbId)) return false;
-      return true;
-    });
+    // Facebook can omit the author expansion on the comments edge.
+    // Resolve missing authors directly by each Comment ID, using the same
+    // Page Access Token that successfully reads the post comments.
+    const authorLookup = async (commentId: string) => {
+      try {
+        const url = new URL(`${GRAPH}/${encodeURIComponent(commentId)}`);
+        url.searchParams.set("fields", "id,from{id,name}");
+        url.searchParams.set("access_token", pageAccessToken);
+        const response = await fetch(url.toString(), { signal: AbortSignal.timeout(12000) });
+        const body: any = await response.json();
+        if (!response.ok) {
+          console.warn("[export-comments] author lookup failed:", commentId, body?.error?.message);
+          return null;
+        }
+        return body?.from || null;
+      } catch (error: any) {
+        console.warn("[export-comments] author lookup exception:", commentId, error?.message);
+        return null;
+      }
+    };
 
-    // Graph sometimes omits "from" entirely for a real commenter (private/
-    // restricted profile, or token missing read_page_mailboxes) even though
-    // the comment itself is genuine — happened on every comment of a 4-
-    // comment post here. Dropping these would silently zero out real
-    // entries, so keep them but give each its own unique fallback name
-    // (never one shared "অজানা" bucket, which would wrongly merge
-    // different unidentified people into a single winner-eligible row).
-    const realComments = withoutPageReplies.map((c) => {
-      if (c.name) return c;
-      const shortId = c.id ? c.id.split("_").pop() || c.id : "?";
-      return { ...c, name: `অজানা ব্যবহারকারী #${shortId}` };
-    });
-
-    // Group by commenter name -> total count + every comment they made,
-    // in original (chronological) order.
-    const byName = new Map<string, { name: string; messages: string[] }>();
-    for (const c of realComments) {
-      const key = c.name!.trim().toLowerCase();
-      if (!byName.has(key)) byName.set(key, { name: c.name!.trim(), messages: [] });
-      byName.get(key)!.messages.push(c.message);
+    // Limit concurrent Graph API lookups to avoid bursts/rate limits.
+    for (let i = 0; i < comments.length; i += 8) {
+      const batch = comments.slice(i, i + 8);
+      await Promise.all(batch.map(async (comment) => {
+        if (comment.fromId && comment.name) return;
+        if (!comment.id) return;
+        const author = await authorLookup(comment.id);
+        if (author?.id) comment.fromId = String(author.id);
+        if (author?.name) comment.name = String(author.name);
+      }));
     }
-    const grouped = Array.from(byName.values());
-    // Most-active commenter first, so the giveaway's winner candidates are
-    // easy to scan at the top of the CSV too.
-    grouped.sort((a, b) => b.messages.length - a.messages.length);
 
+    // Exclude comments made by the Page itself (for example its own replies).
+    const realComments = comments.filter((comment) => {
+      return !(pageFbId && comment.fromId === String(pageFbId));
+    });
+
+    // Group by Facebook user ID, not display name. Two different people can
+    // share the same name; a missing ID is kept separate rather than guessed.
+    const byCommenter = new Map<string, {
+      commenterId: string;
+      name: string;
+      commentIds: string[];
+      messages: string[];
+    }>();
+
+    for (const comment of realComments) {
+      const commenterId = comment.fromId || "";
+      const shortId = comment.id ? comment.id.split("_").pop() || comment.id : "?";
+      const name = comment.name?.trim() || `Unknown user #${shortId}`;
+      const key = commenterId ? `id:${commenterId}` : `comment:${comment.id || shortId}`;
+
+      if (!byCommenter.has(key)) {
+        byCommenter.set(key, { commenterId, name, commentIds: [], messages: [] });
+      }
+      const entry = byCommenter.get(key)!;
+      entry.commentIds.push(comment.id);
+      entry.messages.push(comment.message);
+      // Prefer the resolved name if a later comment for this same ID has it.
+      if (comment.name?.trim()) entry.name = comment.name.trim();
+    }
+
+    const grouped = Array.from(byCommenter.values());
+    grouped.sort((a, b) => b.messages.length - a.messages.length);
     const topCommenter = grouped[0] ? { name: grouped[0].name, count: grouped[0].messages.length } : null;
 
-    const esc = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
-    const csvLines = ["name,total_comments,all_comments"];
-    for (const g of grouped) {
-      csvLines.push(
-        [esc(g.name), esc(g.messages.length), esc(g.messages.join(" | "))].join(",")
-      );
+    const esc = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csvLines = ["commenter_id,name,total_comments,comment_ids,all_comments"];
+    for (const entry of grouped) {
+      csvLines.push([
+        esc(entry.commenterId),
+        esc(entry.name),
+        esc(entry.messages.length),
+        esc(entry.commentIds.join(" | ")),
+        esc(entry.messages.join(" | ")),
+      ].join(","));
     }
     const csv = csvLines.join("\n");
 
@@ -256,6 +291,7 @@ export async function POST(request: Request) {
       post_id: postId,
       total_comments: realComments.length,
       unique_commenters: grouped.length,
+      commenters_with_id: grouped.filter((entry) => Boolean(entry.commenterId)).length,
       top_commenter: topCommenter,
       csv,
     });
