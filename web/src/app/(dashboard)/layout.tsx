@@ -71,7 +71,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <PagesProvider>
       <Topbar />
-      <main className="max-w-[640px] mx-auto px-5 pb-20" style={{ paddingTop: "calc(62px + env(safe-area-inset-top, 0px))" }}>
+      <main
+        className="w-full min-w-0 max-w-[640px] mx-auto px-5 pb-20 overflow-x-hidden"
+        style={{ paddingTop: "calc(62px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}
+      >
         {children}
       </main>
     </PagesProvider>
