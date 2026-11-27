@@ -21,6 +21,8 @@ export type KeywordReply = {
   keyword: string;
   reply: string;
   private_reply?: string | null;
+  reply_image_url?: string | null;
+  private_reply_image_url?: string | null;
   created_at?: string;
 };
 
