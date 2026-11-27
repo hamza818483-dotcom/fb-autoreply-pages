@@ -15,7 +15,7 @@ export default function ExportPage() {
   const [postUrl, setPostUrl] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<{ text: string; ok: boolean } | null>(null);
-  const [stats, setStats] = React.useState<{ total: number; unique: number; top: string } | null>(null);
+  const [stats, setStats] = React.useState<{ total: number; unique: number; withId: number; top: string } | null>(null);
   const csvRef = React.useRef<{ csv: string; postId: string } | null>(null);
 
   async function run() {
@@ -73,6 +73,7 @@ export default function ExportPage() {
             <div className="grid grid-cols-2 gap-2.5 mb-3.5">
               <div className="bg-muted rounded-xl p-3 text-center"><div className="font-bold text-lg">{stats.total}</div><div className="text-[11px] text-muted-foreground">মোট কমেন্ট</div></div>
               <div className="bg-muted rounded-xl p-3 text-center"><div className="font-bold text-lg">{stats.unique}</div><div className="text-[11px] text-muted-foreground">ইউনিক কমেন্টকারী</div></div>
+              <div className="bg-muted rounded-xl p-3 text-center"><div className="font-bold text-lg">{stats.withId}</div><div className="text-[11px] text-muted-foreground">Facebook ID পাওয়া গেছে</div></div>
               <div className="bg-muted rounded-xl p-3 text-center col-span-2"><div className="font-bold text-sm">{stats.top}</div><div className="text-[11px] text-muted-foreground">সর্বোচ্চ কমেন্ট</div></div>
             </div>
             <Button variant="secondary" onClick={download}><FileDown size={16} /> CSV ডাউনলোড করুন</Button>
