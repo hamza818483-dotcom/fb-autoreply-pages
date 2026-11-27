@@ -101,7 +101,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Topbar />
       <main
         className="w-full min-w-0 max-w-[640px] mx-auto px-5 pb-20 overflow-x-hidden"
-        style={{ paddingTop: "calc(49px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}
+        style={{ paddingTop: "calc(68px + env(safe-area-inset-top, 0px))", boxSizing: "border-box" }}
       >
         {pathname !== "/" && (
           <div className="mb-3">
