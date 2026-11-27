@@ -277,9 +277,9 @@ function fuzzyContains(message: string, keyword: string): boolean {
 async function matchKeyword(
   message: string,
   pageId: string
-): Promise<{ reply: string; private_reply: string; matchedKeyword: string } | null> {
+): Promise<{ reply: string; private_reply: string; reply_image_url: string | null; private_reply_image_url: string | null; matchedKeyword: string } | null> {
   try {
-    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`;
+    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply,reply_image_url,private_reply_image_url`;
     const r = await fetch(url, {
       headers: { apikey: dbKey(), Authorization: `Bearer ${dbKey()}` },
       signal: AbortSignal.timeout(10000),
