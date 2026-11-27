@@ -25,14 +25,14 @@ export default function HomePage() {
       <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3.5">Features</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
         {profile?.role === "super_admin" && (
-          <FeatureCard href="/admin" title="Admin Panel" icon={Shield} />
+          <FeatureCard href="/admin" title="Admin Panel" icon={Shield} desc="কাস্টমার তৈরি, অ্যাক্সেস ও সাবস্ক্রিপশন নিয়ন্ত্রণ করুন" />
         )}
         {profile?.role === "super_admin" && (
-          <FeatureCard href="/video-saver" title="Video Saver" icon={Video} />
+          <FeatureCard href="/video-saver" title="Video Saver" icon={Video} desc="ভিডিও লিংক সেভ করুন অথবা ভিডিও ক্লিপ কেটে নিন" />
         )}
-        <FeatureCard href="/keywords" title="Keyword Reply" icon={MessageSquare} />
-        <FeatureCard href="/ai" title="AI Reply" icon={Bot} />
-        <FeatureCard href="/export" title="Comment Collector" icon={Download} />
+        <FeatureCard href="/keywords" title="Keyword Reply" icon={MessageSquare} desc="নির্দিষ্ট শব্দ কমেন্টে এলে অটো রিপ্লাই পাঠান" />
+        <FeatureCard href="/ai" title="AI Reply" icon={Bot} desc="Keyword না মিললে AI দিয়ে স্মার্ট রিপ্লাই জেনারেট করুন" />
+        <FeatureCard href="/export" title="Comment Collector" icon={Download} desc="পোস্টের সব কমেন্ট CSV করে Random Winner-এ ব্যবহার করুন" />
       </div>
 
       <PagesSection />
