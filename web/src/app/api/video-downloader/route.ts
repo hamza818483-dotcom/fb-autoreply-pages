@@ -10,11 +10,34 @@ const ALLOWED_HOSTS = new Set([
   "pinterest.com", "www.pinterest.com", "pin.it",
 ]);
 
-function json(data: unknown, status = 200, provider = "SELF_HOSTED") {
+function json(data: unknown, status = 200, provider = "SELF_HOSTED", extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Video-Provider": provider },
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Video-Provider": provider, ...extraHeaders },
   });
+}
+
+const QUOTA_HEADERS = ["x-ratelimit-requests-limit", "x-ratelimit-requests-remaining", "x-ratelimit-requests-reset"];
+function extractQuotaHeaders(headers: Headers): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const name of QUOTA_HEADERS) {
+    const value = headers.get(name);
+    if (value !== null) result[name] = value;
+  }
+  return result;
+}
+
+type RapidProvider = { host: string; keys: string[] };
+function parseRapidKeys(raw: string | undefined): string[] {
+  return (raw || "").split(",").map((key) => key.trim()).filter(Boolean);
+}
+function getRapidProviders(): RapidProvider[] {
+  const providers: RapidProvider[] = [];
+  const primary = parseRapidKeys(process.env.RAPIDAPI_KEY);
+  if (primary.length) providers.push({ host: "social-download-all-in-one.p.rapidapi.com", keys: primary });
+  const zm = parseRapidKeys(process.env.RAPIDAPI_KEY_ZM);
+  if (zm.length) providers.push({ host: "zm-api.p.rapidapi.com", keys: zm });
+  return providers;
 }
 
 export async function POST(request: Request) {
@@ -34,38 +57,53 @@ export async function POST(request: Request) {
   }
 
   if (mode === "rapidapi") {
-    const rapidApiKey = process.env.RAPIDAPI_KEY;
-    if (!rapidApiKey) return json({ error: true, message: "ReditApi is not configured. Add the RAPIDAPI_KEY secret in Cloudflare Pages." }, 503, "RAPIDAPI");
-    const rapidHost = "social-download-all-in-one.p.rapidapi.com";
-    try {
-      const upstream = await fetch(`https://${rapidHost}/v1/social/autolink`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-RapidAPI-Host": rapidHost,
-          "X-RapidAPI-Key": rapidApiKey,
-        },
-        body: JSON.stringify({ url: source.toString() }),
-        signal: AbortSignal.timeout(110000),
-      });
-      const raw = await upstream.text();
-      let data: unknown;
-      try { data = JSON.parse(raw); } catch {
-        return json({ error: true, message: "ReditApi returned an invalid response." }, 502, "RAPIDAPI");
-      }
-      if (!upstream.ok) {
-        const message = data && typeof data === "object" && "message" in data && typeof (data as {message?:unknown}).message === "string"
-          ? (data as {message:string}).message : `ReditApi request failed (HTTP ${upstream.status}).`;
-        return json({ error: true, message }, upstream.status, "RAPIDAPI");
-      }
-      if (!data || typeof data !== "object" || !Array.isArray((data as {medias?:unknown}).medias)) {
-        return json({ error: true, message: "ReditApi response did not contain downloadable media." }, 502, "RAPIDAPI");
-      }
-      return json({ ...(data as Record<string, unknown>), provider: "RAPIDAPI" }, 200, "RAPIDAPI");
-    } catch (error) {
-      const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-      return json({ error: true, message: timedOut ? "ReditApi request timed out." : "Could not connect to ReditApi." }, 502, "RAPIDAPI");
+    const providers = getRapidProviders();
+    if (providers.length === 0) {
+      return json({ error: true, message: "ReditApi is not configured. Cloudflare Pages needs RAPIDAPI_KEY or RAPIDAPI_KEY_ZM." }, 503, "RAPIDAPI");
     }
+
+    const attempts = providers.flatMap((provider) => provider.keys.map((key) => ({ host: provider.host, key })));
+    let lastQuota: Record<string, string> = {};
+    for (let index = 0; index < attempts.length; index++) {
+      const { host, key } = attempts[index];
+      const lastAttempt = index === attempts.length - 1;
+      try {
+        const upstream = await fetch(`https://${host}/v1/social/autolink`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-RapidAPI-Host": host,
+            "X-RapidAPI-Key": key,
+          },
+          body: JSON.stringify({ url: source.toString() }),
+          signal: AbortSignal.timeout(110000),
+        });
+        const quota = extractQuotaHeaders(upstream.headers);
+        lastQuota = quota;
+        // Keep the previous multi-key/provider fallback: retry 429/403 with the next configured key.
+        if ((upstream.status === 429 || upstream.status === 403) && !lastAttempt) continue;
+
+        const raw = await upstream.text();
+        let data: unknown;
+        try { data = JSON.parse(raw); } catch {
+          return json({ error: true, message: "ReditApi returned an invalid response." }, 502, "RAPIDAPI", quota);
+        }
+        if (!upstream.ok) {
+          const message = data && typeof data === "object" && "message" in data && typeof (data as {message?:unknown}).message === "string"
+            ? (data as {message:string}).message : `ReditApi request failed (HTTP ${upstream.status}).`;
+          return json({ error: true, message }, upstream.status, "RAPIDAPI", quota);
+        }
+        if (!data || typeof data !== "object" || !Array.isArray((data as {medias?:unknown}).medias)) {
+          return json({ error: true, message: "ReditApi response did not contain downloadable media." }, 502, "RAPIDAPI", quota);
+        }
+        return json({ ...(data as Record<string, unknown>), provider: "RAPIDAPI" }, 200, "RAPIDAPI", quota);
+      } catch (error) {
+        const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+        if (!lastAttempt) continue;
+        return json({ error: true, message: timedOut ? "ReditApi request timed out." : "Could not connect to ReditApi." }, 502, "RAPIDAPI", lastQuota);
+      }
+    }
+    return json({ error: true, message: "All configured ReditApi keys/providers failed or exhausted quota." }, 502, "RAPIDAPI", lastQuota);
   }
 
   const backend = process.env.RENDER_API_URL?.trim().replace(/\/+$/, "");
