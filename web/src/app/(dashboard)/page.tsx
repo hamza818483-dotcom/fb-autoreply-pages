@@ -1,6 +1,6 @@
 "use client";
 export const runtime = "edge";
-import { Shield, Video, MessageSquare, Bot, Download } from "lucide-react";
+import { Shield, Video, MessageSquare, Sparkles, Download } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { usePages } from "@/components/providers/pages-provider";
 import { PageSwitcher } from "@/components/page-switcher";
@@ -31,7 +31,7 @@ export default function HomePage() {
           <FeatureCard href="/video-saver" title="Video Saver" icon={Video} />
         )}
         <FeatureCard href="/keywords" title="Keyword Reply" icon={MessageSquare} />
-        <FeatureCard href="/ai" title="AI Reply" icon={Bot} />
+        <FeatureCard href="/ai" title="AI Reply" icon={Sparkles} />
         <FeatureCard href="/export" title="Comment Collector" icon={Download} />
       </div>
 
