@@ -97,7 +97,7 @@ async function handleFbEvent(bodyText: string) {
             const alreadyReplied = await hasReplied(commentId);
             if (!alreadyReplied) {
               const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
-              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token);
+              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token, match.reply_image_url);
               if (!replyResult || replyResult.error) {
                 await dlog.add(`❌ Keyword-reply FAILED\n${JSON.stringify(replyResult)}`);
               } else {
@@ -105,7 +105,7 @@ async function handleFbEvent(bodyText: string) {
               }
 
               const privateMsg = match.private_reply || match.reply;
-              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token);
+              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token, match.private_reply_image_url);
               if (!privateResult || privateResult.error) {
                 const reason = privateResult?.error?.message || privateResult?.error?.error_user_msg || JSON.stringify(privateResult);
                 await dlog.add(`❌ Private reply FAILED\nReason: ${reason}`);
@@ -377,13 +377,13 @@ async function reactToComment(
   }
 }
 
-async function replyToComment(commentId: string, message: string, pageAccessToken: string): Promise<any> {
+async function replyToComment(commentId: string, message: string, pageAccessToken: string, imageUrl?: string | null): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
     const res = await fetch(`${GRAPH}/${commentId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, access_token: token }),
+      body: JSON.stringify({ message, ...(imageUrl ? { attachment_url: imageUrl } : {}), access_token: token }),
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
@@ -394,7 +394,7 @@ async function replyToComment(commentId: string, message: string, pageAccessToke
   }
 }
 
-async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string): Promise<any> {
+async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string, imageUrl?: string | null): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
     // Send a private reply through the Page Send API, addressing the
@@ -405,7 +405,7 @@ async function sendPrivateReply(pageId: string, commentId: string, message: stri
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         recipient: { comment_id: commentId },
-        message: { text: message },
+        message: imageUrl ? { attachment: { type: "template", payload: { template_type: "generic", elements: [{ title: message.slice(0, 80) || " ", ...(message.length > 80 ? { subtitle: message.slice(80, 160) } : {}), image_url: imageUrl }] } } } : { text: message },
         access_token: token || "",
       }),
       signal: AbortSignal.timeout(15000),
