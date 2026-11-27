@@ -13,7 +13,7 @@ export const runtime = "edge";
 // project: FB_VERIFY_TOKEN, PAGE_ACCESS_TOKEN, SUPABASE_SERVICE_ROLE_KEY,
 // DEBUG_BOT_TOKEN, DEBUG_CHAT_ID.
 
-const GRAPH = "https://graph.facebook.com/v19.0";
+const GRAPH = "https://graph.facebook.com/v21.0";
 const SB_URL = "https://wbdyjpjbczfunyhhmtry.supabase.co";
 const SB_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndiZHlqcGpiY3pmdW55aGhtdHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTI5ODAsImV4cCI6MjA5NjI2ODk4MH0.0WR1sgVsl_1XWZfSd0Pwoe6Uxp-2GMTksfseMn5aWjg";
@@ -395,10 +395,15 @@ async function replyToComment(commentId: string, message: string, pageAccessToke
 async function sendPrivateReply(commentId: string, message: string, pageAccessToken: string): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
-    const res = await fetch(
-      `${GRAPH}/${commentId}/private_replies?message=${encodeURIComponent(message)}&access_token=${encodeURIComponent(token || "")}`,
-      { method: "POST", signal: AbortSignal.timeout(15000) }
-    );
+    // POST body ব্যবহার করছি (query string এর বদলে) — Graph API এর
+    // documented/recommended ফর্ম, আর commentId কে object path হিসেবে
+    // leading slash ছাড়া পাঠাচ্ছি যাতে double-slash/encoding issue না হয়।
+    const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ message, access_token: token || "" }).toString(),
+      signal: AbortSignal.timeout(15000),
+    });
     const data = await res.json();
     if (!res.ok) console.error("[fb-webhook] private reply failed:", JSON.stringify(data));
     return data;
