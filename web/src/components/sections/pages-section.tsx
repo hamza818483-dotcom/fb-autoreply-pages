@@ -28,6 +28,8 @@ export function PagesSection() {
 
   async function save() {
     if (!pageId.trim() || !token.trim()) { setErr("Page ID ও Access Token দিন"); return; }
+    const checkErr = await checkIsPageToken(pageId.trim(), token.trim());
+    if (checkErr) { setErr(checkErr); return; }
     const { error } = await sb.from("fb_pages").insert({
       owner_id: session!.user.id,
       page_id: pageId.trim(),
@@ -39,6 +41,27 @@ export function PagesSection() {
     await reloadPages();
   }
 
+  // User token আর Page token দেখতে প্রায় একই, কিন্তু publish action (like,
+  // comment reply, private reply) শুধু Page token দিয়েই কাজ করে। এখানেই
+  // ধরে ফেলি যাতে ভুল token দিয়ে সেভ করে পরে webhook silently fail না করে।
+  async function checkIsPageToken(pid: string, tok: string): Promise<string | null> {
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v19.0/${encodeURIComponent(pid)}?fields=id,category&access_token=${encodeURIComponent(tok)}`
+      );
+      const data = await res.json();
+      if (data?.error) {
+        return `এই token দিয়ে Page (${pid}) access করা যাচ্ছে না: ${data.error.message}। এটা সম্ভবত User Access Token — Page Access Token লাগবে (Graph API Explorer এ GET /${pid}?fields=access_token দিয়ে বের করুন)।`;
+      }
+      if (!data?.category) {
+        return "এটা User Access Token মনে হচ্ছে, Page Access Token না। Graph API Explorer এ GET /" + pid + "?fields=access_token দিয়ে Page token বের করে সেটা ব্যবহার করুন।";
+      }
+      return null;
+    } catch {
+      return null; // network issue হলে block না করে save হতে দিচ্ছি
+    }
+  }
+
   function startEdit(id: string) {
     setEditingId(id);
     setEditToken("");
@@ -47,6 +70,8 @@ export function PagesSection() {
 
   async function saveToken(id: string) {
     if (!editToken.trim()) { setEditErr("নতুন Access Token দিন"); return; }
+    const checkErr = await checkIsPageToken(id, editToken.trim());
+    if (checkErr) { setEditErr(checkErr); return; }
     const { error } = await sb
       .from("fb_pages")
       .update({ page_access_token: editToken.trim() })
