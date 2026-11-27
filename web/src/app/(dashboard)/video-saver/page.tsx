@@ -202,10 +202,10 @@ export default function VideoSaverPage() {
         সরাসরি ভিডিও ফাইল ডাউনলোড করুন অথবা নিজের ভিডিও থেকে ক্লিপ তৈরি করুন।
       </p>
 
-      <div className="flex gap-2 mb-4 bg-muted rounded-xl p-1">
+      <div className="flex w-full min-w-0 max-w-full gap-2 mb-4 bg-muted rounded-xl p-1 overflow-hidden">
         <button
           onClick={() => setTab("saver")}
-          className={`flex-1 h-9 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-0 h-9 rounded-lg px-1 text-center text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
             tab === "saver" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"
           }`}
         >
@@ -376,7 +376,7 @@ function SaverTab() {
             Facebook, YouTube, Instagram, TikTok সহ supported public video link পেস্ট করে ভিডিও ডাউনলোড করুন।
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="w-full min-w-0 max-w-full space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="video-downloader-mode">Mode Select</Label>
             <select
@@ -512,7 +512,7 @@ function SaverTab() {
       )}
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between mb-2">
+        <CardHeader className="flex-row min-w-0 items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <History size={16} className="text-muted-foreground" />
             <CardTitle>Download History</CardTitle>
@@ -523,7 +523,7 @@ function SaverTab() {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="min-w-0 max-w-full overflow-hidden">
+        <CardContent className="w-full min-w-0 max-w-full overflow-hidden">
           {history.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">এখনো কোনো ভিডিও ফেচ করা হয়নি।</p>
           ) : (
@@ -537,7 +537,7 @@ function SaverTab() {
                     className="flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
                   >
                     <Icon size={14} className="text-muted-foreground shrink-0" />
-                    <span className="block truncate flex-1 min-w-0 overflow-hidden">{h.name}</span>
+                    <span className="block min-w-0 flex-1 break-all [overflow-wrap:anywhere]">{h.name}</span>
                     <span
                       className={`text-xs font-semibold shrink-0 ${
                         h.status === "error" ? "text-destructive" : "text-success"
