@@ -97,7 +97,7 @@ async function handleFbEvent(bodyText: string) {
             const alreadyReplied = await hasReplied(commentId);
             if (!alreadyReplied) {
               const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
-              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token, match.reply_image_url);
+              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token);
               if (!replyResult || replyResult.error) {
                 await dlog.add(`❌ Keyword-reply FAILED\n${JSON.stringify(replyResult)}`);
               } else {
@@ -105,7 +105,7 @@ async function handleFbEvent(bodyText: string) {
               }
 
               const privateMsg = match.private_reply || match.reply;
-              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token, match.private_reply_image_url);
+              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token);
               if (!privateResult || privateResult.error) {
                 const reason = privateResult?.error?.message || privateResult?.error?.error_user_msg || JSON.stringify(privateResult);
                 await dlog.add(`❌ Private reply FAILED\nReason: ${reason}`);
@@ -277,9 +277,9 @@ function fuzzyContains(message: string, keyword: string): boolean {
 async function matchKeyword(
   message: string,
   pageId: string
-): Promise<{ reply: string; private_reply: string; reply_image_url: string | null; private_reply_image_url: string | null; matchedKeyword: string } | null> {
+): Promise<{ reply: string; private_reply: string; matchedKeyword: string } | null> {
   try {
-    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply,reply_image_url,private_reply_image_url`;
+    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`;
     const r = await fetch(url, {
       headers: { apikey: dbKey(), Authorization: `Bearer ${dbKey()}` },
       signal: AbortSignal.timeout(10000),
@@ -301,8 +301,6 @@ async function matchKeyword(
         return {
           reply: row.reply || "",
           private_reply: row.private_reply || row.reply || "",
-          reply_image_url: row.reply_image_url || null,
-          private_reply_image_url: row.private_reply_image_url || null,
           matchedKeyword: hit,
         };
       }
@@ -377,13 +375,13 @@ async function reactToComment(
   }
 }
 
-async function replyToComment(commentId: string, message: string, pageAccessToken: string, imageUrl?: string | null): Promise<any> {
+async function replyToComment(commentId: string, message: string, pageAccessToken: string): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
     const res = await fetch(`${GRAPH}/${commentId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, ...(imageUrl ? { attachment_url: imageUrl } : {}), access_token: token }),
+      body: JSON.stringify({ message, access_token: token }),
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
@@ -394,7 +392,7 @@ async function replyToComment(commentId: string, message: string, pageAccessToke
   }
 }
 
-async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string, imageUrl?: string | null): Promise<any> {
+async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
     // Send a private reply through the Page Send API, addressing the
@@ -405,7 +403,7 @@ async function sendPrivateReply(pageId: string, commentId: string, message: stri
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         recipient: { comment_id: commentId },
-        message: imageUrl ? { attachment: { type: "template", payload: { template_type: "generic", elements: [{ title: message.slice(0, 80) || " ", ...(message.length > 80 ? { subtitle: message.slice(80, 160) } : {}), image_url: imageUrl }] } } } : { text: message },
+        message: { text: message },
         access_token: token || "",
       }),
       signal: AbortSignal.timeout(15000),
