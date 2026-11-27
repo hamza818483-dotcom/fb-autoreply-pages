@@ -368,15 +368,15 @@ function SaverTab() {
   const ytId = getYouTubeId(url.trim());
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-4 overflow-x-hidden">
-      <Card className="w-full min-w-0 max-w-full overflow-hidden">
-        <CardHeader className="w-full min-w-0 max-w-full overflow-hidden">
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
           <CardTitle className="min-w-0 break-words">All-in-One Video Downloader</CardTitle>
           <CardDescription className="min-w-0 break-words">
             Facebook, YouTube, Instagram, TikTok সহ supported public video link পেস্ট করে ভিডিও ডাউনলোড করুন।
           </CardDescription>
         </CardHeader>
-        <CardContent className="w-full min-w-0 max-w-full space-y-3">
+        <CardContent className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="video-downloader-mode">Mode Select</Label>
             <select
@@ -390,7 +390,7 @@ function SaverTab() {
               <option value="own">Own (Render + yt-dlp)</option>
             </select>
           </div>
-          <div className="flex w-full min-w-0 max-w-full gap-2">
+          <div className="flex min-w-0 gap-2">
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -426,11 +426,11 @@ function SaverTab() {
 
       {result && (
         <Card className="w-full min-w-0 max-w-full overflow-hidden">
-          <CardHeader className="min-w-0">
+          <CardHeader>
             <CardTitle className="truncate">{result.title || "Video Found"}</CardTitle>
             {result.author && <CardDescription>By {result.author}</CardDescription>}
           </CardHeader>
-          <CardContent className="min-w-0 space-y-4 overflow-hidden">
+          <CardContent className="space-y-4">
             {result.thumbnail && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -469,7 +469,7 @@ function SaverTab() {
               </div>
             )}
 
-            <div className="w-full min-w-0 max-w-full space-y-2 overflow-hidden">
+            <div className="min-w-0 space-y-2">
               {result.download_supported === false ? (
                 <div className="text-[13px] text-warning bg-warning/10 border border-warning/20 rounded-xl px-3.5 py-3">
                   {result.notice || "এই ভিডিওটি এই mode-এ ডাউনলোড করা যাবে না।"}
@@ -478,7 +478,7 @@ function SaverTab() {
                 result.medias.map((media, idx) => (
                   <div
                     key={idx}
-                    className="flex w-full min-w-0 max-w-full items-center justify-between gap-2.5 overflow-hidden border border-border rounded-xl px-3.5 py-2.5"
+                    className="flex min-w-0 items-center justify-between gap-2.5 border border-border rounded-xl px-3.5 py-2.5"
                   >
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="text-[13px] font-semibold truncate">{formatQuality(media.quality)}</div>
@@ -523,21 +523,21 @@ function SaverTab() {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="w-full min-w-0 max-w-full overflow-hidden">
+        <CardContent className="min-w-0">
           {history.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">এখনো কোনো ভিডিও ফেচ করা হয়নি।</p>
           ) : (
-            <ul className="w-full min-w-0 max-w-full space-y-2 overflow-hidden">
+            <ul className="space-y-2">
               {history.map((h) => {
                 const meta = PLATFORM_META[h.platform];
                 const Icon = meta.icon;
                 return (
                   <li
                     key={h.id}
-                    className="flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
+                    className="flex min-w-0 items-center gap-2.5 text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
                   >
                     <Icon size={14} className="text-muted-foreground shrink-0" />
-                    <span className="block min-w-0 flex-1 break-all [overflow-wrap:anywhere]">{h.name}</span>
+                    <span className="block min-w-0 flex-1 truncate">{h.name}</span>
                     <span
                       className={`text-xs font-semibold shrink-0 ${
                         h.status === "error" ? "text-destructive" : "text-success"
