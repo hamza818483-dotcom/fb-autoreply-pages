@@ -24,7 +24,8 @@ function Topbar() {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={profile.logo_url} alt="" className="w-full h-full object-cover" />
         ) : (
-          <MessageSquareText size={17} />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/app-icon.svg" alt="" className="w-full h-full object-cover" />
         )}
       </div>
       <span className="font-bold text-[15px] tracking-tight flex-1 truncate min-w-0">
