@@ -105,7 +105,7 @@ async function handleFbEvent(bodyText: string) {
               }
 
               const privateMsg = match.private_reply || match.reply;
-              const privateResult = await sendPrivateReply(commentId, privateMsg, pageConfig.page_access_token);
+              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token);
               if (!privateResult || privateResult.error) {
                 const reason = privateResult?.error?.message || privateResult?.error?.error_user_msg || JSON.stringify(privateResult);
                 await dlog.add(`❌ Private reply FAILED\nReason: ${reason}`);
@@ -392,16 +392,20 @@ async function replyToComment(commentId: string, message: string, pageAccessToke
   }
 }
 
-async function sendPrivateReply(commentId: string, message: string, pageAccessToken: string): Promise<any> {
+async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
-    // POST body ব্যবহার করছি (query string এর বদলে) — Graph API এর
-    // documented/recommended ফর্ম, আর commentId কে object path হিসেবে
-    // leading slash ছাড়া পাঠাচ্ছি যাতে double-slash/encoding issue না হয়।
-    const res = await fetch(`${GRAPH}/${commentId}/private_replies`, {
+    // Send a private reply through the Page Send API, addressing the
+    // original comment as the recipient. The legacy /private_replies edge
+    // is no longer a reliable supported path.
+    const res = await fetch(`${GRAPH}/${pageId}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ message, access_token: token || "" }).toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text: message },
+        access_token: token || "",
+      }),
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
