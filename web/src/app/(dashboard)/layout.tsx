@@ -1,12 +1,12 @@
 "use client";
 export const runtime = "edge";
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { MessageCircle, Menu, X } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { MessageCircle, Menu, X, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { PagesProvider } from "@/components/providers/pages-provider";
 import { createClient } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
+
 
 function Topbar() {
   const { profile, session } = useAuth();
@@ -27,17 +27,38 @@ function Topbar() {
       <span className="font-bold text-[15px] tracking-tight flex-1 truncate min-w-0">
         {profile?.business_name || "FB Auto-Reply"}
       </span>
-      <span className="text-muted-foreground text-xs hidden sm:inline truncate max-w-[160px] shrink-0">{session?.user?.email}</span>
-      <Button variant="secondary" size="sm" onClick={() => sb.auth.signOut()} className="shrink-0">
-        লগআউট
-      </Button>
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+          className="w-10 h-10 rounded-xl border border-border bg-card flex items-center justify-center text-foreground"
+        >
+          {menuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-border bg-card p-2 shadow-xl">
+            <div className="px-3 py-2 text-xs text-muted-foreground break-all border-b border-border mb-2">
+              {session?.user?.email}
+            </div>
+            <button
+              type="button"
+              onClick={async () => { setMenuOpen(false); await sb.auth.signOut(); }}
+              className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-muted"
+            >
+              লগআউট
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
-  const router = useRouter();
+  const router = useRouter();\n  const pathname = usePathname();
 
   React.useEffect(() => {
     if (!loading && !session) router.replace("/login");
