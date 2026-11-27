@@ -15,8 +15,11 @@ export const runtime = "edge";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 const SB_URL = "https://wbdyjpjbczfunyhhmtry.supabase.co";
-const SB_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndiZHlqcGpiY3pmdW55aGhtdHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2OTI5ODAsImV4cCI6MjA5NjI2ODk4MH0.0WR1sgVsl_1XWZfSd0Pwoe6Uxp-2GMTksfseMn5aWjg";
+// Legacy anon JWT is revoked (UNAUTHORIZED_INVALID_API_KEY) — see
+// web/src/lib/supabase.ts commit 4d0f1b1. Use the current publishable key as
+// the fallback instead so the webhook doesn't silently fail when
+// SUPABASE_SERVICE_ROLE_KEY is unset/misconfigured in Cloudflare Pages env.
+const SB_KEY = "sb_publishable_aQq0-MD_7-rw8sLgAtbJFw_x49dHVmZ";
 
 // The webhook has no user session, so RLS-protected tables (fb_pages,
 // keyword_replies) require the service_role key to bypass RLS. Falls back
