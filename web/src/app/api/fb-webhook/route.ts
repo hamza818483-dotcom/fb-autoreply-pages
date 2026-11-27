@@ -103,20 +103,20 @@ async function handleFbEvent(bodyText: string) {
             const alreadyReplied = await hasReplied(commentId);
             if (!alreadyReplied) {
               const replyText = fromId ? `@[${fromId}] ${match.reply}` : match.reply;
-              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token);
+              const replyResult = await replyToComment(commentId, replyText, pageConfig.page_access_token, match.reply_image_url);
               if (!replyResult || replyResult.error) {
                 await dlog.add(`❌ Keyword-reply FAILED\n${JSON.stringify(replyResult)}`);
               } else {
-                await dlog.add(`✅ Replied (keyword)`);
+                await dlog.add(`✅ Replied (keyword)${match.reply_image_url ? " + image" : ""}`);
               }
 
               const privateMsg = match.private_reply || match.reply;
-              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token);
+              const privateResult = await sendPrivateReply(webhookPageId, commentId, privateMsg, pageConfig.page_access_token, match.private_reply_image_url);
               if (!privateResult || privateResult.error) {
                 const reason = privateResult?.error?.message || privateResult?.error?.error_user_msg || JSON.stringify(privateResult);
                 await dlog.add(`❌ Private reply FAILED\nReason: ${reason}`);
               } else {
-                await dlog.add(`✅ Private (inbox) reply sent`);
+                await dlog.add(`✅ Private (inbox) reply sent${match.private_reply_image_url ? " (image)" : ""}`);
               }
 
               await markReplied(commentId);
@@ -288,9 +288,9 @@ function fuzzyContains(message: string, keyword: string): boolean {
 async function matchKeyword(
   message: string,
   pageId: string
-): Promise<{ reply: string; private_reply: string; matchedKeyword: string } | null> {
+): Promise<{ reply: string; private_reply: string; matchedKeyword: string; reply_image_url: string | null; private_reply_image_url: string | null } | null> {
   try {
-    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply`;
+    const url = `${SB_URL}/rest/v1/keyword_replies?page_id=eq.${encodeURIComponent(pageId)}&select=keyword,reply,private_reply,reply_image_url,private_reply_image_url`;
     const r = await fetch(url, {
       headers: { apikey: dbKey(), Authorization: `Bearer ${dbKey()}` },
       signal: AbortSignal.timeout(10000),
@@ -313,6 +313,8 @@ async function matchKeyword(
           reply: row.reply || "",
           private_reply: row.private_reply || row.reply || "",
           matchedKeyword: hit,
+          reply_image_url: row.reply_image_url || null,
+          private_reply_image_url: row.private_reply_image_url || row.reply_image_url || null,
         };
       }
     }
@@ -386,13 +388,18 @@ async function reactToComment(
   }
 }
 
-async function replyToComment(commentId: string, message: string, pageAccessToken: string): Promise<any> {
+async function replyToComment(commentId: string, message: string, pageAccessToken: string, imageUrl?: string | null): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
+    // Comment replies on Facebook can carry attachment_url (an image URL)
+    // alongside or instead of message text — the Graph API accepts both.
+    const body: any = { access_token: token };
+    if (message) body.message = message;
+    if (imageUrl) body.attachment_url = imageUrl;
     const res = await fetch(`${GRAPH}/${commentId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, access_token: token }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     });
     const data = await res.json();
@@ -403,18 +410,25 @@ async function replyToComment(commentId: string, message: string, pageAccessToke
   }
 }
 
-async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string): Promise<any> {
+async function sendPrivateReply(pageId: string, commentId: string, message: string, pageAccessToken: string, imageUrl?: string | null): Promise<any> {
   try {
     const token = pageAccessToken || process.env.PAGE_ACCESS_TOKEN;
     // Send a private reply through the Page Send API, addressing the
     // original comment as the recipient. The legacy /private_replies edge
-    // is no longer a reliable supported path.
+    // is no longer a reliable supported path. If an image URL is set,
+    // send it as an image attachment message instead of plain text —
+    // Messenger Send API only allows one message type per call, so when
+    // both text and an image are present we send the image (the keyword's
+    // reply text was already posted as the public comment reply).
+    const msg: any = imageUrl
+      ? { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } }
+      : { text: message };
     const res = await fetch(`${GRAPH}/${pageId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         recipient: { comment_id: commentId },
-        message: { text: message },
+        message: msg,
         access_token: token || "",
       }),
       signal: AbortSignal.timeout(15000),
@@ -515,7 +529,7 @@ async function tryGemini(
   total: number
 ): Promise<string | null> {
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
