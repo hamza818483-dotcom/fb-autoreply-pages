@@ -196,9 +196,9 @@ export default function VideoSaverPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-lg font-bold tracking-tight mb-1">Video Saver</h1>
-      <p className="text-[13px] text-muted-foreground mb-4">
+    <div className="w-full min-w-0 max-w-full overflow-x-clip">
+      <h1 className="text-lg font-bold tracking-tight mb-1 break-words">Video Saver</h1>
+      <p className="w-full min-w-0 text-[13px] text-muted-foreground mb-4 break-words">
         সরাসরি ভিডিও ফাইল ডাউনলোড করুন অথবা নিজের ভিডিও থেকে ক্লিপ তৈরি করুন।
       </p>
 
@@ -370,9 +370,9 @@ function SaverTab() {
   return (
     <div className="w-full min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <Card className="w-full min-w-0 max-w-full overflow-hidden">
-        <CardHeader className="min-w-0">
-          <CardTitle>All-in-One Video Downloader</CardTitle>
-          <CardDescription>
+        <CardHeader className="w-full min-w-0 max-w-full overflow-hidden">
+          <CardTitle className="min-w-0 break-words">All-in-One Video Downloader</CardTitle>
+          <CardDescription className="min-w-0 break-words">
             Facebook, YouTube, Instagram, TikTok সহ supported public video link পেস্ট করে ভিডিও ডাউনলোড করুন।
           </CardDescription>
         </CardHeader>
@@ -390,7 +390,7 @@ function SaverTab() {
               <option value="own">Own (Render + yt-dlp)</option>
             </select>
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full min-w-0 max-w-full gap-2">
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -884,7 +884,7 @@ function CutterTab() {
           <CardTitle>ভিডিও লোড করুন</CardTitle>
           <CardDescription>ভিডিও ফাইল আপলোড করুন অথবা Facebook/YouTube/Instagram/TikTok/direct video link দিন</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="w-full min-w-0 max-w-full space-y-3">
           <div>
             <Label>ফাইল আপলোড</Label>
             <input
@@ -1075,7 +1075,7 @@ function CutterTab() {
       )}
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between mb-2">
+        <CardHeader className="flex-row min-w-0 items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <History size={16} className="text-muted-foreground" />
             <CardTitle>Clip History</CardTitle>
