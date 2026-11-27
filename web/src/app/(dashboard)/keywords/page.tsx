@@ -91,11 +91,11 @@ export default function KeywordsPage() {
         ) : rows.length === 0 ? (
           <div className="text-muted-foreground text-sm text-center py-6">No keywords added yet</div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {rows.map((row, index) => (
               <div key={row.id} className="border border-border rounded-xl p-4 hover:shadow-sm transition-shadow">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-bold text-primary">{index + 1}</span>
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-bold text-primary">{rows.length - index}</span>
                   <span className="font-bold text-primary text-xs break-all">{row.keyword}</span>
                 </div>
                 <div className="text-sm text-muted-foreground whitespace-pre-wrap mb-3 leading-relaxed">{row.reply}</div>
