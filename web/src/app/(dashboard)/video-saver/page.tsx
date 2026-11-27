@@ -116,6 +116,11 @@ type HistoryItem = {
   platform: Platform;
   status: "ready" | "unsupported" | "error";
   at: number;
+  // সফল fetch হলে মূল URL আর পুরো result (medias সহ) সংরক্ষণ করা হয়, যাতে
+  // Download History থেকে ক্লিক করে আবার দেখা/ডাউনলোড করা যায়, আগে পেজ না
+  // reload করেও বা API আবার call না করেও।
+  originalUrl?: string;
+  result?: DownloaderResult;
 };
 
 const SAVER_HISTORY_KEY = "video-saver:history";
@@ -337,6 +342,8 @@ function SaverTab() {
         platform: detectPlatform(trimmed),
         status: "ready",
         at: Date.now(),
+        originalUrl: trimmed,
+        result: data,
       });
       setHistory(h);
     } catch (e) {
@@ -362,6 +369,19 @@ function SaverTab() {
       await forceDownload(media.url, `${result?.title || "video"}.${media.extension}`);
     } finally {
       setDownloadingIdx(null);
+    }
+  }
+
+  // Download History-তে থাকা পুরনো একটা আইটেমে ক্লিক করলে সেই সময়ের result
+  // (medias সহ) আবার কার্ডে দেখানো হয় — API আবার call না করেই, সাথে সাথে
+  // আবার ডাউনলোড করা যায়। শুধু "ready" status-এর আইটেমেই result সংরক্ষিত থাকে।
+  function handleHistoryItemClick(h: HistoryItem) {
+    if (!h.result) return;
+    setResult(h.result);
+    setUrl(h.originalUrl || "");
+    setErrorMsg("");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
@@ -532,20 +552,27 @@ function SaverTab() {
               {history.map((h) => {
                 const meta = PLATFORM_META[h.platform];
                 const Icon = meta.icon;
+                const clickable = !!h.result;
                 return (
-                  <li
-                    key={h.id}
-                    className="flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0"
-                  >
-                    <Icon size={14} className="text-muted-foreground shrink-0" />
-                    <span className="block min-w-0 flex-1 truncate">{h.name}</span>
-                    <span
-                      className={`text-xs font-semibold shrink-0 ${
-                        h.status === "error" ? "text-destructive" : "text-success"
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      disabled={!clickable}
+                      onClick={() => handleHistoryItemClick(h)}
+                      className={`flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden text-[13px] border-b border-border-soft last:border-0 pb-2 last:pb-0 text-left ${
+                        clickable ? "cursor-pointer hover:bg-muted/40 rounded-lg -mx-1 px-1" : "cursor-default"
                       }`}
                     >
-                      {h.status === "error" ? "Failed" : "Fetched"}
-                    </span>
+                      <Icon size={14} className="text-muted-foreground shrink-0" />
+                      <span className="block min-w-0 flex-1 truncate">{h.name}</span>
+                      <span
+                        className={`text-xs font-semibold shrink-0 ${
+                          h.status === "error" ? "text-destructive" : "text-success"
+                        }`}
+                      >
+                        {h.status === "error" ? "Failed" : "Fetched"}
+                      </span>
+                    </button>
                   </li>
                 );
               })}
