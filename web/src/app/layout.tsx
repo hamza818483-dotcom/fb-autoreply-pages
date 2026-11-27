@@ -6,6 +6,8 @@ import { AuthProvider } from "@/components/providers/auth-provider";
 export const metadata: Metadata = {
   title: "FB Auto-Reply Dashboard",
   description: "ATLAS Facebook comment auto-reply control panel",
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/app-icon.svg", apple: "/app-icon.svg" },
 };
 
 export const viewport: Viewport = {
