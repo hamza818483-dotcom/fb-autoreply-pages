@@ -15,7 +15,7 @@ function Topbar() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border flex items-center gap-3 px-5 py-3.5 overflow-visible"
+      className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border flex items-center gap-3 px-3 py-3.5 overflow-visible"
       style={{ paddingTop: "calc(14px + env(safe-area-inset-top, 0px))", maxWidth: "100vw", boxSizing: "border-box" }}
     >
       <div className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-white shrink-0 overflow-hidden" style={{ background: "linear-gradient(135deg, var(--primary), var(--indigo))" }}>
@@ -29,7 +29,7 @@ function Topbar() {
       <span className="font-bold text-[15px] tracking-tight flex-1 truncate min-w-0">
         {profile?.business_name || "FB Auto-Reply"}
       </span>
-      <div className="relative shrink-0">
+      <div className="relative ml-auto shrink-0">
         <button
           type="button"
           aria-label={menuOpen ? "Close menu" : "Open menu"}
