@@ -46,6 +46,8 @@ export default function KeywordsPage() {
 
   async function uploadImage(file: File, target: "public" | "private") {
     if (!currentPageId) { setMsg({ text: "Please select a page first", ok: false }); return; }
+    if (file.size > 5 * 1024 * 1024) { setMsg({ text: "Image must be 5 MB or smaller", ok: false }); return; }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setMsg({ text: "Use a JPG, PNG, or WebP image", ok: false }); return; }
     const { data: { session } } = await sb.auth.getSession();
     if (!session?.access_token) { setMsg({ text: "Please sign in again", ok: false }); return; }
     setUploadingImage(target);
@@ -151,18 +153,18 @@ export default function KeywordsPage() {
         ) : rows.length === 0 ? (
           <div className="text-muted-foreground text-sm text-center py-6">No keywords added yet</div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2.5">
             {rows.map((row, index) => (
-              <div key={row.id} className="border border-border rounded-xl p-4 hover:shadow-sm transition-shadow">
+              <div key={row.id} className="min-w-0 w-full border border-border rounded-xl p-3 hover:shadow-sm transition-shadow">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-bold text-primary">{rows.length - index}</span>
                   <span className="font-bold text-primary text-xs break-all">{row.keyword}</span>
                 </div>
-                <div className="text-sm text-muted-foreground whitespace-pre-wrap mb-3 leading-relaxed">{row.reply}</div>
+                <div className="min-w-0 text-xs text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere] mb-2.5 leading-relaxed">{row.reply}</div>
                 {row.private_reply && (
-                  <div className="text-xs text-muted-foreground whitespace-pre-wrap mb-3 leading-relaxed">Inbox: {row.private_reply}</div>
+                  <div className="min-w-0 text-[11px] text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere] mb-2.5 leading-relaxed">Inbox: {row.private_reply}</div>
                 )}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" size="sm" onClick={() => startEdit(row)} disabled={isExpired}>Edit</Button>
                   <Button variant="destructive" size="sm" onClick={() => remove(row.id)} disabled={isExpired}>Delete</Button>
                 </div>
