@@ -272,8 +272,8 @@ async function isDebugEnabled(pageId, env) {
       console.error("[isDebugEnabled] query failed status=", r.status, JSON.stringify(rows).slice(0, 300));
       return true; // fail open on query error — don't silently hide debug
     }
-    if (!Array.isArray(rows) || rows.length === 0) return true; // default ON if no settings row yet (was OFF — caused silent no-op)
-    return rows[0].debug_alerts_enabled !== false; // only explicit false disables it
+    if (!Array.isArray(rows) || rows.length === 0) return false; // default OFF if no settings row yet
+    return rows[0].debug_alerts_enabled === true;
   } catch (e) {
     console.error("[isDebugEnabled] exception:", e.message);
     return true; // fail open: better a stray debug message than losing real alerts
