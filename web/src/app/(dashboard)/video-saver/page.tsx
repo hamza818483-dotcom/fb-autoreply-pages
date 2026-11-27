@@ -239,6 +239,9 @@ type DownloaderMedia = {
 };
 
 type DownloaderResult = {
+  provider?: "RAPIDAPI" | "SELF_HOSTED";
+  download_supported?: boolean;
+  notice?: string;
   title?: string;
   author?: string;
   thumbnail?: string;
@@ -285,6 +288,7 @@ async function forceDownload(url: string, filename: string) {
 
 function SaverTab() {
   const [url, setUrl] = React.useState("");
+  const [mode, setMode] = React.useState<"rapidapi" | "own">("rapidapi");
   const [loading, setLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState("");
   const [result, setResult] = React.useState<DownloaderResult | null>(null);
@@ -316,7 +320,7 @@ function SaverTab() {
       const res = await fetch("/api/video-downloader", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed }),
+        body: JSON.stringify({ url: trimmed, mode }),
       });
       const parsedQuota = parseQuotaFromHeaders(res.headers);
       if (parsedQuota) {
@@ -373,6 +377,19 @@ function SaverTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="video-downloader-mode">Mode Select</Label>
+            <select
+              id="video-downloader-mode"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as "rapidapi" | "own")}
+              disabled={loading}
+              className="w-full h-10 rounded-lg border border-border bg-background px-3 text-[13px] font-semibold"
+            >
+              <option value="rapidapi">ReditApi (RapidAPI)</option>
+              <option value="own">Own (Render + yt-dlp)</option>
+            </select>
+          </div>
           <div className="flex gap-2">
             <Input
               value={url}
@@ -453,7 +470,11 @@ function SaverTab() {
             )}
 
             <div className="space-y-2">
-              {result.medias && result.medias.length > 0 ? (
+              {result.download_supported === false ? (
+                <div className="text-[13px] text-warning bg-warning/10 border border-warning/20 rounded-xl px-3.5 py-3">
+                  {result.notice || "এই ভিডিওটি এই mode-এ ডাউনলোড করা যাবে না।"}
+                </div>
+              ) : result.medias && result.medias.length > 0 ? (
                 result.medias.map((media, idx) => (
                   <div
                     key={idx}
